@@ -18,7 +18,6 @@ import bpy
 import math
 import os
 import sys
-from mathutils import Vector
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import base_body  # noqa: E402
@@ -53,28 +52,41 @@ def fabric_material(name, color, roughness=0.75):
     return mat
 
 
-def select_faces_near(obj, center, radius):
-    """Return face indices whose centroid falls within `radius` of `center` (world space)."""
-    import bmesh
-    bm = bmesh.new()
-    bm.from_mesh(obj.data)
-    bm.faces.ensure_lookup_table()
-    hits = []
-    for f in bm.faces:
-        c = f.calc_center_median()
-        world_c = obj.matrix_world @ c
-        if (world_c - center).length <= radius:
-            hits.append(f.index)
-    bm.free()
-    return hits
+def shrinkwrap_accent(name, target, location, rotation, scale, material,
+                       size=0.3, subdiv_cuts=4, offset=0.012, thickness=0.012, parent=None):
+    """A small flat disc that conforms to `target`'s surface via Shrinkwrap.
 
+    This is the general version of the technique that fixed Zayn's blanket: instead of
+    guessing raw coordinates against a mesh whose exact dimensions aren't known ahead of
+    time (or hand-selecting faces on the fused mesh, which gives ragged/jagged edges — see
+    the first cheek-patch attempt, which read as fangs instead of markings up close), place
+    a small clean-edged disc roughly in the right spot and let Shrinkwrap conform it to the
+    real surface. Works for any small colour accent: cheek patches, blankets, badges.
+    """
+    bpy.ops.mesh.primitive_plane_add(size=size, location=location, rotation=rotation)
+    disc = bpy.context.active_object
+    disc.name = name
+    disc.scale = scale
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.subdivide(number_cuts=subdiv_cuts)
+    bpy.ops.object.mode_set(mode='OBJECT')
+    disc.data.materials.append(material)
 
-def assign_material_to_faces(obj, mat, face_indices):
-    if mat.name not in obj.data.materials:
-        obj.data.materials.append(mat)
-    mat_index = list(obj.data.materials).index(mat)
-    for i in face_indices:
-        obj.data.polygons[i].material_index = mat_index
+    shrink = disc.modifiers.new("Shrinkwrap", 'SHRINKWRAP')
+    shrink.target = target
+    shrink.wrap_method = 'NEAREST_SURFACEPOINT'
+    shrink.offset = offset
+
+    solid = disc.modifiers.new("Solidify", 'SOLIDIFY')
+    solid.thickness = thickness
+
+    bpy.ops.object.select_all(action='DESELECT')
+    disc.select_set(True)
+    bpy.context.view_layer.objects.active = disc
+    bpy.ops.object.shade_smooth()
+    if parent:
+        disc.parent = parent
+    return disc
 
 
 def build():
@@ -88,44 +100,25 @@ def build():
     zayn.data.materials.append(tan)
     milo.data.materials.append(yellow)
 
-    # Milo's cheek patches already exist as geometry at (0.155*side, -0.155, 0.995), r~0.078
-    # (see build_milo_base) — just needs its own material slot instead of body yellow.
+    # Milo's cheek patches — previously face-selected on the fused mesh, which gave jagged/
+    # serrated edges that read as fangs up close (see closeup_milo.png). Small shrinkwrapped
+    # discs give clean edges instead, same trick as Zayn's blanket below.
     for side in (1, -1):
-        center = Vector((0.155 * side, -0.155, 0.995))
-        faces = select_faces_near(milo, center, radius=0.11)
-        assign_material_to_faces(milo, turquoise, faces)
+        shrinkwrap_accent(
+            f"Milo_Cheek_{side}", milo,
+            location=(0.155 * side, -0.20, 0.995), rotation=(math.radians(90), 0, 0),
+            scale=(0.85, 1.0, 1.0), material=turquoise,
+            size=0.10, subdiv_cuts=3, offset=0.010, thickness=0.008, parent=milo,
+        )
 
-    # Zayn's saddle blanket: separate prop mesh draped across the back (chest/spine region),
-    # not fused into the body — matches base_body.py's own "outfit/props attach on top" plan.
+    # Zayn's saddle blanket — draped near the hump, wide enough to read from the front.
     blanket_mat = fabric_material("Zayn_Blanket_Fabric", (0.08, 0.52, 0.53))
-    # Narrow enough to clear the shoulder joints (x=+-0.24 per ZAYN_JOINTS), sitting high on
-    # the back near the hump rather than at mid-torso where it collided with the arms.
-    # Shrinkwrap-based: a flat, subdivided plane conforms to Zayn's actual body surface via
-    # the modifier, so it drapes correctly regardless of exact body proportions — no more
-    # guessing raw coordinates against a mesh whose real dimensions I don't have memorized.
-    bpy.ops.mesh.primitive_plane_add(size=0.85, location=(0, 0.05, 1.25),
-                                      rotation=(math.radians(35), 0, 0))
-    blanket = bpy.context.active_object
-    blanket.name = "Zayn_Blanket"
-    blanket.scale = (1.0, 0.75, 1.0)
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.subdivide(number_cuts=6)
-    bpy.ops.object.mode_set(mode='OBJECT')
-    blanket.data.materials.append(blanket_mat)
-
-    shrink = blanket.modifiers.new("Shrinkwrap", 'SHRINKWRAP')
-    shrink.target = zayn
-    shrink.wrap_method = 'NEAREST_SURFACEPOINT'
-    shrink.offset = 0.018
-
-    solid = blanket.modifiers.new("Solidify", 'SOLIDIFY')
-    solid.thickness = 0.03
-
-    bpy.ops.object.select_all(action='DESELECT')
-    blanket.select_set(True)
-    bpy.context.view_layer.objects.active = blanket
-    bpy.ops.object.shade_smooth()
-    blanket.parent = zayn
+    shrinkwrap_accent(
+        "Zayn_Blanket", zayn,
+        location=(0, 0.05, 1.25), rotation=(math.radians(35), 0, 0),
+        scale=(1.0, 0.75, 1.0), material=blanket_mat,
+        size=0.85, subdiv_cuts=6, offset=0.018, thickness=0.03, parent=zayn,
+    )
 
     return zayn, milo
 
