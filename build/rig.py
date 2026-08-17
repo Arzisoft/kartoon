@@ -51,8 +51,12 @@ SIDED_BONES = [
 ]
 
 
-def build_skeleton(name, joints_module=base_body):
-    """Create the armature and its edit bones, fitted to the shared joint table."""
+def build_skeleton(name, joints_table):
+    """Create the armature and its edit bones, fitted to a character's joint table.
+
+    The bone list is the SAME for every character — only the joint table differs. That is the
+    whole point: identical structure means one motion clip drives both characters.
+    """
     arm_data = bpy.data.armatures.new(f"{name}_Data")
     arm_obj = bpy.data.objects.new(name, arm_data)
     bpy.context.scene.collection.objects.link(arm_obj)
@@ -67,8 +71,8 @@ def build_skeleton(name, joints_module=base_body):
 
     def add(bone_name, head_j, tail_j, parent, connect, side=1):
         b = eb.new(bone_name)
-        b.head = joints_module.joint(head_j, side)
-        b.tail = joints_module.joint(tail_j, side)
+        b.head = base_body.joint(joints_table, head_j, side)
+        b.tail = base_body.joint(joints_table, tail_j, side)
         if parent:
             b.parent = made[parent]
             b.use_connect = connect
@@ -129,79 +133,92 @@ WAVE_POSE = {
     "spine": (0, 0, -5),
 }
 
+# The same pose dict applied to Milo. It is deliberately NOT re-authored for him: if the
+# identical bone rotations produce a sensible wave on a character with completely different
+# proportions, the shared-skeleton claim holds and motion really is reusable between them.
+MILO_LOOK_UP_POSE = {
+    "upper_arm.L": (0, 0, -100),
+    "forearm.L": (0, 0, -35),
+    "head": (-22, 18, 0),
+    "neck": (-10, 8, 0),
+    "spine": (0, 0, 4),
+}
 
-def build():
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-    scene = bpy.context.scene
+RIGS = {
+    "zayn": {"build": base_body.build_zayn_base, "joints": base_body.ZAYN_JOINTS,
+             "rig_name": "Zayn_Rig", "pose": WAVE_POSE, "spread": 1.15,
+             "target_z": 1.15, "cam_dist": 7.5},
+    "milo": {"build": base_body.build_milo_base, "joints": base_body.MILO_JOINTS,
+             "rig_name": "Milo_Rig", "pose": MILO_LOOK_UP_POSE, "spread": 0.72,
+             "target_z": 0.70, "cam_dist": 4.6},
+}
 
-    body = base_body.build_zayn_base()
-    arm_obj = build_skeleton("Zayn_Rig")
+
+def build_rigged(which):
+    """Build + skin one character. Returns (mesh, armature)."""
+    spec = RIGS[which]
+    body = spec["build"]()
+    arm_obj = build_skeleton(spec["rig_name"], spec["joints"])
     groups = skin(body, arm_obj)
-    print(f"VERTEX_GROUPS:{groups} BONES:{len(arm_obj.data.bones)}")
+    print(f"{which.upper()}_VERTEX_GROUPS:{groups} BONES:{len(arm_obj.data.bones)}")
+    body.data.materials.append(base_body._clay())
+    return body, arm_obj
 
-    clay = bpy.data.materials.new("Clay")
-    clay.use_nodes = True
-    bsdf = clay.node_tree.nodes["Principled BSDF"]
-    bsdf.inputs["Base Color"].default_value = (0.72, 0.70, 0.68, 1.0)
-    bsdf.inputs["Roughness"].default_value = 0.65
-    body.data.materials.append(clay)
 
-    # duplicate the whole rigged character so rest and posed sit side by side in one frame
+def _duplicate_rigged(body, arm_obj):
     bpy.ops.object.select_all(action='DESELECT')
     body.select_set(True)
     arm_obj.select_set(True)
     bpy.context.view_layer.objects.active = arm_obj
     bpy.ops.object.duplicate()
-    posed_arm = bpy.context.active_object
+    return bpy.context.active_object
 
-    arm_obj.location = (-1.15, 0, 0)
-    posed_arm.location = (1.15, 0, 0)
-    pose(posed_arm, WAVE_POSE)
 
-    backdrop = bpy.data.materials.new("Backdrop")
-    backdrop.use_nodes = True
-    backdrop.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (0.88, 0.90, 0.92, 1)
-    bpy.ops.mesh.primitive_plane_add(size=20, location=(0, 0, 0))
-    bpy.context.active_object.data.materials.append(backdrop)
-    bpy.ops.mesh.primitive_plane_add(size=20, location=(0, 5, 5), rotation=(math.radians(90), 0, 0))
-    bpy.context.active_object.data.materials.append(backdrop)
+def build_pose_test(which):
+    """Rest vs. posed, side by side, so the deformation can actually be judged."""
+    spec = RIGS[which]
+    bpy.ops.wm.read_factory_settings(use_empty=True)
 
-    world = bpy.data.worlds.new("World")
-    scene.world = world
-    world.use_nodes = True
-    world.node_tree.nodes["Background"].inputs[0].default_value = (0.85, 0.88, 0.91, 1.0)
-    world.node_tree.nodes["Background"].inputs[1].default_value = 0.7
+    body, arm_obj = build_rigged(which)
+    posed_arm = _duplicate_rigged(body, arm_obj)
 
-    target = bpy.data.objects.new("Target", None)
-    target.location = (0, 0, 1.15)
-    scene.collection.objects.link(target)
-    bpy.ops.object.camera_add(location=(0, -7.5, 1.6))
-    cam = bpy.context.active_object
-    cam.data.lens = 50
-    track = cam.constraints.new(type='TRACK_TO')
-    track.target = target
-    track.track_axis = 'TRACK_NEGATIVE_Z'
-    track.up_axis = 'UP_Y'
-    scene.camera = cam
+    arm_obj.location = (-spec["spread"], 0, 0)
+    posed_arm.location = (spec["spread"], 0, 0)
+    pose(posed_arm, spec["pose"])
 
-    for loc, energy, size in [((-4, -5, 5), 900, 4), ((4, -4, 3), 350, 4), ((0, 5, 4), 300, 3)]:
-        bpy.ops.object.light_add(type='AREA', location=loc)
-        bpy.context.active_object.data.energy = energy
-        bpy.context.active_object.data.size = size
-
-    try:
-        scene.render.engine = 'BLENDER_EEVEE_NEXT'
-    except Exception:
-        scene.render.engine = 'BLENDER_EEVEE'
-    scene.render.resolution_x = 1400
-    scene.render.resolution_y = 800
-    scene.render.image_settings.file_format = 'PNG'
+    base_body._stage(spec["target_z"], spec["cam_dist"], res_x=1400, res_y=800)
     return body, arm_obj
 
 
-if __name__ == "__main__":
-    build()
-    out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "zayn_rig.png")
-    bpy.context.scene.render.filepath = out_path
+def build_two_shot():
+    """Both characters posed together — the actual production shot, and the only render that
+    shows whether the size contrast still works once they are animated."""
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+
+    zayn_body, zayn_arm = build_rigged("zayn")
+    zayn_arm.location = (-0.75, 0, 0)
+    pose(zayn_arm, WAVE_POSE)
+
+    milo_body, milo_arm = build_rigged("milo")
+    milo_arm.location = (0.72, 0, 0)
+    pose(milo_arm, MILO_LOOK_UP_POSE)
+
+    base_body._stage(target_z=1.05, cam_dist=6.4, res_x=1400, res_y=850)
+    return zayn_body, milo_body
+
+
+def _render(path):
+    bpy.context.scene.render.filepath = path
     bpy.ops.render.render(write_still=True)
-    print(f"RENDERED_TO:{out_path}")
+    print(f"RENDERED_TO:{path}")
+
+
+if __name__ == "__main__":
+    here = os.path.dirname(os.path.abspath(__file__))
+
+    for which in ("zayn", "milo"):
+        build_pose_test(which)
+        _render(os.path.join(here, f"{which}_rig.png"))
+
+    build_two_shot()
+    _render(os.path.join(here, "two_shot_rig.png"))

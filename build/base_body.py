@@ -28,11 +28,16 @@ from mathutils import Vector
 # calm one; Milo (later) is built to roughly 0.6x this so the two-shot silhouette
 # contrast survives. Head is deliberately ~1/3 of total height (baby schema).
 ZAYN_HEIGHT = 2.20
+MILO_HEIGHT = 1.36  # ~0.62x Zayn: big/calm vs. small/quick has to read instantly in a two-shot
 
 # Remesh/smoothing settings are a species-read tradeoff, not just a quality dial: too coarse a
 # voxel or too much smoothing melts the neck, ears and muzzle into the body mass and the
 # character stops reading as a camel at all.
+# Voxel size is ABSOLUTE, so a smaller character needs a smaller voxel to keep the same level
+# of detail — Milo's beak is roughly a third the size of Zayn's muzzle and dissolves at Zayn's
+# setting.
 VOXEL_SIZE = 0.022
+MILO_VOXEL_SIZE = 0.013
 SMOOTH_FACTOR = 0.35
 SMOOTH_ITERATIONS = 2
 
@@ -77,7 +82,7 @@ def add_capsule(scaffold, p1, p2, radius):
     return scaffold
 
 
-def fuse(scaffold):
+def fuse(scaffold, voxel_size=VOXEL_SIZE):
     """Join every scaffold part, then voxel-remesh into one continuous manifold surface."""
     parts = scaffold["parts"]
     bpy.ops.object.select_all(action='DESELECT')
@@ -91,7 +96,7 @@ def fuse(scaffold):
 
     remesh = body.modifiers.new("Remesh", 'REMESH')
     remesh.mode = 'VOXEL'
-    remesh.voxel_size = VOXEL_SIZE
+    remesh.voxel_size = voxel_size
     bpy.ops.object.modifier_apply(modifier=remesh.name)
 
     smooth = body.modifiers.new("Smooth", 'SMOOTH')
@@ -127,9 +132,9 @@ ZAYN_JOINTS = {
 }
 
 
-def joint(name, side=1):
-    """Joint position, mirrored to the -X side when side is -1."""
-    x, y, z = ZAYN_JOINTS[name]
+def joint(table, name, side=1):
+    """Joint position from a character's joint table, mirrored to -X when side is -1."""
+    x, y, z = table[name]
     return (x * side, y, z)
 
 
@@ -144,22 +149,25 @@ def build_zayn_base():
     """
     s = _scaffold("Zayn_Base")
 
+    def J(name, side=1):
+        return joint(ZAYN_JOINTS, name, side)
+
     # --- legs: short and stubby, toddler proportion (feet on z=0)
     for side in (1, -1):
-        add_capsule(s, joint("hip", side), joint("knee", side), 0.112)
-        add_capsule(s, joint("knee", side), joint("ankle", side), 0.095)
+        add_capsule(s, J("hip", side), J("knee", side), 0.112)
+        add_capsule(s, J("knee", side), J("ankle", side), 0.095)
         # foot, pushed forward (-Y) so he doesn't look like he's on stilts
         add_ball(s, 0.125, (0.19 * side, -0.06, 0.075), scale=(0.85, 1.40, 0.55))
 
     # --- pelvis + belly: round, no waist (baby schema)
-    add_ball(s, 0.28, joint("pelvis"), scale=(1.05, 0.92, 0.85))
-    add_ball(s, 0.38, joint("spine"), scale=(1.05, 0.95, 0.95))
+    add_ball(s, 0.28, J("pelvis"), scale=(1.05, 0.92, 0.85))
+    add_ball(s, 0.38, J("spine"), scale=(1.05, 0.95, 0.95))
     # blend ball between belly and chest — without it the two masses leave a visible ridge
     # now that smoothing is dialled down to protect the muzzle and ears
     add_ball(s, 0.355, (0, 0.015, 1.07), scale=(1.08, 0.92, 0.90))
 
     # --- chest/shoulders, kept narrow front-to-back so the hump behind it stays legible
-    add_ball(s, 0.33, joint("chest"), scale=(1.12, 0.88, 0.80))
+    add_ball(s, 0.33, J("chest"), scale=(1.12, 0.88, 0.80))
 
     # --- HUMP: primary camel cue. Sits high on the back and overlaps the shoulder mass
     # enough to grow out of it — pushed too far back it reads as a ball stuck on, too far
@@ -168,7 +176,7 @@ def build_zayn_base():
 
     # --- neck: long and clearly narrower than head and chest, leaning forward so the head
     # sits ahead of the hump and a notch opens up between the two masses in profile.
-    add_capsule(s, joint("neck_base"), joint("head_base"), 0.108)
+    add_capsule(s, J("neck_base"), J("head_base"), 0.108)
 
     # --- head: big (baby schema) but smaller than v3 to make room for a visible neck
     add_ball(s, 0.285, (0, -0.13, 1.96), scale=(1.0, 1.02, 0.95))
@@ -187,8 +195,8 @@ def build_zayn_base():
     # --- arms in A-pose (~35 deg out from vertical), ending in mitten hands.
     # Longer than v3 so the hands clear the belly and can actually hold a prop.
     for side in (1, -1):
-        add_capsule(s, joint("shoulder", side), joint("elbow", side), 0.100)
-        add_capsule(s, joint("elbow", side), joint("wrist", side), 0.086)
+        add_capsule(s, J("shoulder", side), J("elbow", side), 0.100)
+        add_capsule(s, J("elbow", side), J("wrist", side), 0.086)
         # mitten hand: one mass + a thumb, enough to hold props and read as a hand
         add_ball(s, 0.110, (0.635 * side, -0.07, 0.57), scale=(0.85, 1.05, 1.0))
         add_ball(s, 0.052, (0.545 * side, -0.11, 0.59))
@@ -196,51 +204,159 @@ def build_zayn_base():
     return fuse(s)
 
 
-# ------------------------------------------------------------ preview scene
-def _preview_eyes(body, parent):
-    """Temporary eyes for judging the silhouette read. NOT part of the base mesh —
-    the face is a later layer (shape keys for expression + lip sync)."""
-    mat = bpy.data.materials.new("PreviewEyeDark")
-    mat.use_nodes = True
-    mat.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (0.02, 0.02, 0.02, 1)
+# ---------------------------------------------------------------------- Milo
+# Same joint NAMES as Zayn — that is what lets one motion clip play on both and what lets
+# humanoid motion retarget onto either. Only the positions differ: Milo is ~0.62x Zayn's
+# height with a proportionally bigger head, a much shorter neck, and wings where the arms go.
+MILO_JOINTS = {
+    "hip":       (0.095, 0.00, 0.395),
+    "knee":      (0.105, 0.00, 0.255),
+    "ankle":     (0.110, 0.00, 0.090),
+    "toe":       (0.110, -0.135, 0.045),
+    "pelvis":    (0.000, 0.00, 0.445),
+    "spine":     (0.000, 0.01, 0.600),
+    "chest":     (0.000, 0.01, 0.775),
+    "neck_base": (0.000, 0.02, 0.855),
+    "head_base": (0.000, -0.01, 0.945),
+    "head_top":  (0.000, -0.02, 1.310),
+    "shoulder":  (0.215, 0.045, 0.815),
+    "elbow":     (0.300, 0.020, 0.590),
+    "wrist":     (0.335, -0.015, 0.370),
+    "hand_end":  (0.350, -0.035, 0.245),
+}
+
+
+def build_milo_base():
+    """Upright budgie base body, A-pose, facing -Y. Returns the single joined mesh object.
+
+    Milo needs almost no re-thinking of the body plan — birds are already bipedal — but two
+    things do change relative to a literal budgie:
+
+      * The wings double as arms. A real budgie's wing cannot hold a spoon or point at
+        something, and most of the target episode topics need exactly that. So each wing is
+        built along the arm chain and ends in a small mitten hand at the tip.
+      * The beak has to be able to open. Rhubarb lip-sync drives mouth shapes, and a solid
+        cone has no mouth to shape, so the beak is built as an upper and a lower half with a
+        seam between them for the face layer to work with later.
+
+    Species cues (production-notes names these as Milo's required markers):
+      * the hooked beak
+      * cheek patches — carried here as a slight raised form so the colour layer has
+        geometry to sit on rather than being a flat decal
+    """
+    s = _scaffold("Milo_Base")
+
+    def J(name, side=1):
+        return joint(MILO_JOINTS, name, side)
+
+    # --- legs: short, thin, set close together (bird stance)
     for side in (1, -1):
-        bpy.ops.mesh.primitive_uv_sphere_add(radius=0.068, location=(0.138 * side, -0.32, 1.93),
+        add_capsule(s, J("hip", side), J("knee", side), 0.048)
+        add_capsule(s, J("knee", side), J("ankle", side), 0.040)
+        # foot, splayed forward like a perching bird's
+        add_ball(s, 0.062, (0.110 * side, -0.055, 0.038), scale=(0.80, 1.70, 0.45))
+
+    # --- body: one continuous egg, widest low down. Budgies have no visible waist or hips.
+    add_ball(s, 0.155, J("pelvis"), scale=(1.02, 0.95, 0.90))
+    add_ball(s, 0.205, J("spine"), scale=(1.02, 0.98, 1.05))
+    add_ball(s, 0.195, J("chest"), scale=(1.05, 0.95, 0.95))
+
+    # --- neck: barely there. A budgie's head sits almost straight on the body, and this is
+    # a big part of what separates the small/quick read from Zayn's long-necked calm.
+    add_capsule(s, J("neck_base"), J("head_base"), 0.105)
+
+    # --- head: proportionally larger than Zayn's (baby schema pushed further on the small one)
+    add_ball(s, 0.235, (0, -0.02, 1.085), scale=(1.0, 1.0, 0.98))
+
+    # --- BEAK: primary budgie cue. Short, deep and hooked DOWNWARD — the hook is the whole
+    # difference between "budgie" and "generic bird". Upper and lower halves are separated so
+    # the face layer has a seam to open for lip sync.
+    # These MUST sit forward of the head's front surface (head centre y-0.02, radius 0.235,
+    # so the face is at about y-0.255); tucked any further back the beak is simply inside the
+    # skull and the character reads as an eyeball with no face at all.
+    # Kept NARROW across X. A beak as wide as it is tall merges into the cheeks and reads as
+    # a bulbous nose; the narrow cross-section plus the downward hook is what says "budgie".
+    # Short and tucked, not long and protruding: a beak that reaches far forward reads as a
+    # nose no matter how narrow it is. A budgie's beak barely clears the face and drops almost
+    # straight down from under the cere.
+    add_ball(s, 0.072, (0, -0.240, 1.030), scale=(0.72, 1.00, 1.10))       # upper beak base
+    add_ball(s, 0.050, (0, -0.268, 0.955), scale=(0.70, 0.90, 1.35))       # hooked tip, curling down
+    add_ball(s, 0.046, (0, -0.232, 0.918), scale=(0.85, 0.95, 0.60))       # lower beak
+    # cere (the fleshy band above a budgie's beak) — small but very recognisable
+    add_ball(s, 0.062, (0, -0.220, 1.125), scale=(1.10, 0.75, 0.50))
+
+    # --- cheek patches: raised slightly so the colour layer sits on real form
+    for side in (1, -1):
+        add_ball(s, 0.078, (0.155 * side, -0.155, 0.995), scale=(0.55, 0.85, 0.85))
+
+    # --- wings-as-arms: a flattened plate running along each arm chain, plus a mitten hand
+    # at the tip so Milo can actually hold and point.
+    for side in (1, -1):
+        add_capsule(s, J("shoulder", side), J("elbow", side), 0.058)
+        add_capsule(s, J("elbow", side), J("wrist", side), 0.048)
+        # the wing plate: thin across X, broad in Z, so it reads as a folded wing in profile
+        add_ball(s, 0.150, (0.280 * side, 0.010, 0.590), scale=(0.34, 0.70, 1.45))
+        # mitten hand at the wing tip
+        add_ball(s, 0.058, (0.350 * side, -0.035, 0.255), scale=(0.85, 1.05, 1.0))
+        add_ball(s, 0.030, (0.300 * side, -0.065, 0.275))
+
+    # --- tail: long and sweeping down-back off the rump, the budgie's other big silhouette cue.
+    # Built from capsules rather than spaced balls: separate balls left gaps the voxel remesh
+    # turned into a detached blob floating behind him.
+    add_capsule(s, (0, 0.090, 0.520), (0, 0.230, 0.360), 0.080)
+    add_capsule(s, (0, 0.230, 0.360), (0, 0.330, 0.235), 0.055)
+    add_capsule(s, (0, 0.330, 0.235), (0, 0.395, 0.140), 0.036)
+
+    return fuse(s, voxel_size=MILO_VOXEL_SIZE)
+
+
+# ------------------------------------------------------------ preview scene
+# Temporary eyes for judging the silhouette read. NOT part of the base mesh — the face is a
+# later layer (shape keys for expression + lip sync). Radius and position per character.
+PREVIEW_EYES = {
+    "Zayn_Base": (0.068, (0.138, -0.320, 1.930)),
+    "Milo_Base": (0.056, (0.158, -0.168, 1.110)),
+}
+
+CHARACTERS = {
+    "zayn": {"build": build_zayn_base, "mesh": "Zayn_Base", "spread": 1.55,
+             "target_z": 1.15, "cam_dist": 8.5},
+    "milo": {"build": build_milo_base, "mesh": "Milo_Base", "spread": 0.95,
+             "target_z": 0.70, "cam_dist": 5.2},
+}
+
+
+def _clay():
+    mat = bpy.data.materials.get("Clay") or bpy.data.materials.new("Clay")
+    mat.use_nodes = True
+    bsdf = mat.node_tree.nodes["Principled BSDF"]
+    bsdf.inputs["Base Color"].default_value = (0.72, 0.70, 0.68, 1.0)
+    bsdf.inputs["Roughness"].default_value = 0.65
+    return mat
+
+
+def _preview_eyes(mesh_name, parent):
+    radius, (ex, ey, ez) = PREVIEW_EYES[mesh_name]
+    mat = bpy.data.materials.get("PreviewEyeDark")
+    if mat is None:
+        mat = bpy.data.materials.new("PreviewEyeDark")
+        mat.use_nodes = True
+        mat.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (0.02, 0.02, 0.02, 1)
+    for side in (1, -1):
+        bpy.ops.mesh.primitive_uv_sphere_add(radius=radius, location=(ex * side, ey, ez),
                                              segments=16, ring_count=8)
         eye = bpy.context.active_object
-        eye.name = f"Zayn_PreviewEye_{'L' if side > 0 else 'R'}"
+        eye.name = f"{mesh_name}_PreviewEye_{'L' if side > 0 else 'R'}"
         eye.data.materials.append(mat)
         bpy.ops.object.shade_smooth()
         eye.parent = parent
 
 
-def build_preview():
-    """Front / three-quarter / side turnaround so the silhouette can be judged."""
-    bpy.ops.wm.read_factory_settings(use_empty=True)
+def _stage(target_z, cam_dist, res_x=1600, res_y=800):
+    """Backdrop, camera and three-point lighting, shared by every preview render."""
     scene = bpy.context.scene
 
-    body = build_zayn_base()
-
-    clay = bpy.data.materials.new("Clay")
-    clay.use_nodes = True
-    bsdf = clay.node_tree.nodes["Principled BSDF"]
-    bsdf.inputs["Base Color"].default_value = (0.72, 0.70, 0.68, 1.0)
-    bsdf.inputs["Roughness"].default_value = 0.65
-    body.data.materials.append(clay)
-
-    # three copies at different rotations, spread along X
-    views = [(-1.55, 0), (0.0, 45), (1.55, 90)]
-    for i, (x, deg) in enumerate(views):
-        if i == 0:
-            obj = body
-        else:
-            obj = body.copy()
-            obj.data = body.data  # linked duplicate: same mesh, no extra memory
-            scene.collection.objects.link(obj)
-        obj.location = (x, 0, 0)
-        obj.rotation_euler = (0, 0, math.radians(deg))
-        _preview_eyes(body, obj)
-
-    backdrop = bpy.data.materials.new("Backdrop")
+    backdrop = bpy.data.materials.get("Backdrop") or bpy.data.materials.new("Backdrop")
     backdrop.use_nodes = True
     backdrop.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (0.88, 0.90, 0.92, 1)
     bpy.ops.mesh.primitive_plane_add(size=20, location=(0, 0, 0))
@@ -255,9 +371,9 @@ def build_preview():
     world.node_tree.nodes["Background"].inputs[1].default_value = 0.7
 
     target = bpy.data.objects.new("Target", None)
-    target.location = (0, 0, 1.15)
+    target.location = (0, 0, target_z)
     scene.collection.objects.link(target)
-    bpy.ops.object.camera_add(location=(0, -8.5, 1.6))
+    bpy.ops.object.camera_add(location=(0, -cam_dist, target_z + 0.45))
     cam = bpy.context.active_object
     cam.data.lens = 50
     track = cam.constraints.new(type='TRACK_TO')
@@ -275,16 +391,71 @@ def build_preview():
         scene.render.engine = 'BLENDER_EEVEE_NEXT'
     except Exception:
         scene.render.engine = 'BLENDER_EEVEE'
-    scene.render.resolution_x = 1600
-    scene.render.resolution_y = 800
+    scene.render.resolution_x = res_x
+    scene.render.resolution_y = res_y
     scene.render.image_settings.file_format = 'PNG'
+
+
+def build_turnaround(which):
+    """Front / three-quarter / side turnaround so one character's silhouette can be judged."""
+    spec = CHARACTERS[which]
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    scene = bpy.context.scene
+
+    body = spec["build"]()
+    body.data.materials.append(_clay())
+
+    spread = spec["spread"]
+    for i, (x, deg) in enumerate([(-spread, 0), (0.0, 45), (spread, 90)]):
+        if i == 0:
+            obj = body
+        else:
+            obj = body.copy()
+            obj.data = body.data  # linked duplicate: same mesh, no extra memory
+            scene.collection.objects.link(obj)
+        obj.location = (x, 0, 0)
+        obj.rotation_euler = (0, 0, math.radians(deg))
+        _preview_eyes(spec["mesh"], obj)
+
+    _stage(spec["target_z"], spec["cam_dist"])
     return body
 
 
-if __name__ == "__main__":
-    body = build_preview()
-    print(f"BASE_MESH_VERTS:{len(body.data.vertices)} POLYS:{len(body.data.polygons)}")
-    out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "zayn_base.png")
-    bpy.context.scene.render.filepath = out_path
+def build_lineup():
+    """Both characters side by side — the only render that actually tests the size contrast,
+    which is the show's core visual engine (big/calm/outdoor vs. small/quick/indoor)."""
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    clay = _clay()
+
+    zayn = build_zayn_base()
+    zayn.data.materials.append(clay)
+    zayn.location = (-0.75, 0, 0)
+    _preview_eyes("Zayn_Base", zayn)
+
+    milo = build_milo_base()
+    milo.data.materials.append(clay)
+    milo.location = (0.72, 0, 0)
+    _preview_eyes("Milo_Base", milo)
+
+    _stage(target_z=1.05, cam_dist=6.4, res_x=1400, res_y=850)
+    return zayn, milo
+
+
+def _render(path):
+    bpy.context.scene.render.filepath = path
     bpy.ops.render.render(write_still=True)
-    print(f"RENDERED_TO:{out_path}")
+    print(f"RENDERED_TO:{path}")
+
+
+if __name__ == "__main__":
+    here = os.path.dirname(os.path.abspath(__file__))
+
+    for which in ("zayn", "milo"):
+        body = build_turnaround(which)
+        print(f"{which.upper()}_VERTS:{len(body.data.vertices)} "
+              f"HEIGHT:{round(body.dimensions.z, 3)}")
+        _render(os.path.join(here, f"{which}_base.png"))
+
+    zayn, milo = build_lineup()
+    print(f"HEIGHT_RATIO:{round(milo.dimensions.z / zayn.dimensions.z, 3)}")
+    _render(os.path.join(here, "lineup_base.png"))
