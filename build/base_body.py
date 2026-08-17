@@ -37,7 +37,7 @@ MILO_HEIGHT = 1.36  # ~0.62x Zayn: big/calm vs. small/quick has to read instantl
 # of detail — Milo's beak is roughly a third the size of Zayn's muzzle and dissolves at Zayn's
 # setting.
 VOXEL_SIZE = 0.022
-MILO_VOXEL_SIZE = 0.013
+MILO_VOXEL_SIZE = 0.010
 SMOOTH_FACTOR = 0.35
 SMOOTH_ITERATIONS = 2
 
@@ -80,6 +80,28 @@ def add_capsule(scaffold, p1, p2, radius):
     add_ball(scaffold, radius, p1)
     add_ball(scaffold, radius, p2)
     return scaffold
+
+
+def add_blend_chain(s, keys, overlap=0.22):
+    """A smoothly tapering tube through a list of ((x,y,z), radius) keys.
+
+    Stacking a few big spheres of different radii leaves a visible ridge at every junction —
+    on a small round character that banding reads as a segmented insect abdomen. Interpolating
+    many overlapping spheres removes the steps.
+
+    Spacing must be derived from the LOCAL RADIUS, not a fixed density. Spheres spaced further
+    apart than roughly a quarter of their own radius leave scallops between them, and on a thin
+    limb a fixed density produces spacing wider than the limb itself — which just replaces
+    banding with ripples.
+    """
+    for i in range(len(keys) - 1):
+        (p0, r0), (p1, r1) = keys[i], keys[i + 1]
+        p0, p1 = Vector(p0), Vector(p1)
+        span = (p1 - p0).length
+        steps = max(2, math.ceil(span / (min(r0, r1) * overlap)))
+        for k in range(steps + 1):
+            t = k / steps
+            add_ball(s, r0 + (r1 - r0) * t, tuple(p0.lerp(p1, t)))
 
 
 def fuse(scaffold, voxel_size=VOXEL_SIZE):
@@ -230,20 +252,22 @@ def build_zayn_base():
 # humanoid motion retarget onto either. Only the positions differ: Milo is ~0.62x Zayn's
 # height with a proportionally bigger head, a much shorter neck, and wings where the arms go.
 MILO_JOINTS = {
-    "hip":       (0.095, 0.00, 0.395),
-    "knee":      (0.105, 0.00, 0.255),
-    "ankle":     (0.110, 0.00, 0.090),
-    "toe":       (0.110, -0.135, 0.045),
-    "pelvis":    (0.000, 0.00, 0.445),
-    "spine":     (0.000, 0.01, 0.600),
-    "chest":     (0.000, 0.01, 0.775),
-    "neck_base": (0.000, 0.02, 0.855),
-    "head_base": (0.000, -0.01, 0.945),
-    "head_top":  (0.000, -0.02, 1.310),
-    "shoulder":  (0.215, 0.045, 0.815),
-    "elbow":     (0.300, 0.020, 0.590),
-    "wrist":     (0.335, -0.015, 0.370),
-    "hand_end":  (0.350, -0.035, 0.245),
+    "hip":       (0.085, 0.020, 0.420),
+    "knee":      (0.095, 0.000, 0.275),
+    "ankle":     (0.100, 0.000, 0.125),
+    "toe":       (0.100, -0.110, 0.035),
+    "pelvis":    (0.000, 0.020, 0.470),
+    "spine":     (0.000, -0.010, 0.630),
+    "chest":     (0.000, 0.010, 0.800),
+    "neck_base": (0.000, 0.010, 0.860),
+    "head_base": (0.000, -0.030, 0.995),
+    # Same lesson as Zayn: the head bone runs FORWARD along the beak, not up through the
+    # skull, or automatic weights hand the beak to the neck and the face mangles on a turn.
+    "head_top":  (0.000, -0.280, 1.030),
+    "shoulder":  (0.155, 0.040, 0.830),
+    "elbow":     (0.215, 0.010, 0.640),
+    "wrist":     (0.245, -0.020, 0.440),
+    "hand_end":  (0.255, -0.040, 0.320),
 }
 
 
@@ -270,63 +294,91 @@ def build_milo_base():
     def J(name, side=1):
         return joint(MILO_JOINTS, name, side)
 
-    # --- legs: short, thin, set close together (bird stance)
+    # --- legs: thicker than a real budgie's so they don't read as spindly insect legs, and
+    # continuous from hip to toe. The previous version's foot pads did not reach the ankle and
+    # the remesh left them as separate lumps sitting on the floor.
     for side in (1, -1):
-        add_capsule(s, J("hip", side), J("knee", side), 0.048)
-        add_capsule(s, J("knee", side), J("ankle", side), 0.040)
-        # foot, splayed forward like a perching bird's
-        add_ball(s, 0.062, (0.110 * side, -0.055, 0.038), scale=(0.80, 1.70, 0.45))
+        add_blend_chain(s, [
+            (J("hip", side), 0.058),
+            (J("knee", side), 0.050),
+            (J("ankle", side), 0.044),
+            ((0.100 * side, -0.030, 0.038), 0.046),
+        ])
+        # three short forward toes, each starting inside the foot pad so they cannot detach
+        for toe_x, toe_y in ((0.032, -0.088), (0.000, -0.100), (-0.032, -0.088)):
+            add_blend_chain(s, [
+                ((0.100 * side, -0.030, 0.036), 0.030),
+                ((0.100 * side + toe_x, toe_y, 0.026), 0.019),
+            ])
 
-    # --- body: one continuous egg, widest low down. Budgies have no visible waist or hips.
-    add_ball(s, 0.155, J("pelvis"), scale=(1.02, 0.95, 0.90))
-    add_ball(s, 0.205, J("spine"), scale=(1.02, 0.98, 1.05))
-    add_ball(s, 0.195, J("chest"), scale=(1.05, 0.95, 0.95))
+    # --- body: ONE smooth teardrop, no steps anywhere. Narrow at the shoulders, widest low at
+    # the belly. Built as a blend chain because the previous stacked-sphere torso banded, and
+    # a banded round body reads as a segmented insect abdomen more than anything else here.
+    add_blend_chain(s, [
+        ((0.000, 0.020, 0.375), 0.108),
+        (J("pelvis"), 0.152),
+        ((0.000, 0.005, 0.560), 0.184),
+        (J("spine"), 0.196),
+        ((0.000, 0.005, 0.720), 0.184),
+        (J("chest"), 0.158),
+        (J("neck_base"), 0.108),
+        (J("head_base"), 0.092),
+    ])
 
-    # --- neck: barely there. A budgie's head sits almost straight on the body, and this is
-    # a big part of what separates the small/quick read from Zayn's long-necked calm.
-    add_capsule(s, J("neck_base"), J("head_base"), 0.105)
+    # --- head: smaller than the old ball, slightly taller than wide so the skull has a brow.
+    add_ball(s, 0.158, (0, -0.045, 1.108), scale=(1.00, 0.98, 1.06))
 
-    # --- head: proportionally larger than Zayn's (baby schema pushed further on the small one)
-    add_ball(s, 0.235, (0, -0.02, 1.085), scale=(1.0, 1.0, 0.98))
+    # --- BEAK: the budgie cue, and the face's dominant feature. It has to CLEAR the head
+    # surface (about y-0.203) to read at all. Narrow across X and hooked sharply downward —
+    # the hook is the whole difference between "budgie" and "generic bird". Upper and lower
+    # mandibles stay separate so the face layer has a seam to open for lip sync.
+    # Kept SHORT. Every extra millimetre forward turns it from a beak into a snout — the
+    # previous pass reached to y-0.298 and the whole head started reading as a dinosaur.
+    add_blend_chain(s, [
+        ((0, -0.196, 1.074), 0.080),
+        ((0, -0.243, 1.030), 0.058),
+        ((0, -0.256, 0.982), 0.034),
+        ((0, -0.243, 0.955), 0.019),
+    ])
+    add_ball(s, 0.058, (0, -0.204, 0.968), scale=(0.92, 0.90, 0.62))     # lower mandible
+    # cere: the fleshy band over the top of a budgie's beak, small but very recognisable
+    add_ball(s, 0.058, (0, -0.172, 1.150), scale=(1.15, 0.80, 0.52))
 
-    # --- BEAK: primary budgie cue. Short, deep and hooked DOWNWARD — the hook is the whole
-    # difference between "budgie" and "generic bird". Upper and lower halves are separated so
-    # the face layer has a seam to open for lip sync.
-    # These MUST sit forward of the head's front surface (head centre y-0.02, radius 0.235,
-    # so the face is at about y-0.255); tucked any further back the beak is simply inside the
-    # skull and the character reads as an eyeball with no face at all.
-    # Kept NARROW across X. A beak as wide as it is tall merges into the cheeks and reads as
-    # a bulbous nose; the narrow cross-section plus the downward hook is what says "budgie".
-    # Short and tucked, not long and protruding: a beak that reaches far forward reads as a
-    # nose no matter how narrow it is. A budgie's beak barely clears the face and drops almost
-    # straight down from under the cere.
-    add_ball(s, 0.072, (0, -0.240, 1.030), scale=(0.72, 1.00, 1.10))       # upper beak base
-    add_ball(s, 0.050, (0, -0.268, 0.955), scale=(0.70, 0.90, 1.35))       # hooked tip, curling down
-    add_ball(s, 0.046, (0, -0.232, 0.918), scale=(0.85, 0.95, 0.60))       # lower beak
-    # cere (the fleshy band above a budgie's beak) — small but very recognisable
-    add_ball(s, 0.062, (0, -0.220, 1.125), scale=(1.10, 0.75, 0.50))
+    # --- brow ridges: give the eyes a socket to sit in. Eyes stuck on a bare sphere read as
+    # a fly's; eyes set into a brow read as a face.
+    for side in (1, -1):
+        add_ball(s, 0.070, (0.086 * side, -0.128, 1.152), scale=(1.00, 0.85, 0.70))
 
     # --- cheek patches: raised slightly so the colour layer sits on real form
     for side in (1, -1):
-        add_ball(s, 0.078, (0.155 * side, -0.155, 0.995), scale=(0.55, 0.85, 0.85))
+        add_ball(s, 0.060, (0.116 * side, -0.138, 1.040), scale=(0.60, 0.85, 0.85))
 
-    # --- wings-as-arms: a flattened plate running along each arm chain, plus a mitten hand
-    # at the tip so Milo can actually hold and point.
+    # --- no crest. Three spikes read as antennae; one big swept crest read as a pterosaur.
+    # A budgie's skull is smooth, so the head stays smooth and the beak does the identifying.
+
+    # --- wings-as-arms: a tapering folded wing along each arm chain, ending in a small hand.
+    # A real budgie wing cannot hold a spoon or point at something, and most of the target
+    # episode topics need exactly that.
     for side in (1, -1):
-        add_capsule(s, J("shoulder", side), J("elbow", side), 0.058)
-        add_capsule(s, J("elbow", side), J("wrist", side), 0.048)
-        # the wing plate: thin across X, broad in Z, so it reads as a folded wing in profile
-        add_ball(s, 0.150, (0.280 * side, 0.010, 0.590), scale=(0.34, 0.70, 1.45))
-        # mitten hand at the wing tip
-        add_ball(s, 0.058, (0.350 * side, -0.035, 0.255), scale=(0.85, 1.05, 1.0))
-        add_ball(s, 0.030, (0.300 * side, -0.065, 0.275))
+        add_blend_chain(s, [
+            (J("shoulder", side), 0.058),
+            (J("elbow", side), 0.048),
+            (J("wrist", side), 0.040),
+            (J("hand_end", side), 0.044),
+        ])
+        # wing plate: thin across X, tapering to a point so it reads as a folded wing in
+        # profile rather than a slab hanging off him
+        add_ball(s, 0.118, (0.178 * side, 0.020, 0.742), scale=(0.34, 0.74, 1.12))
+        add_ball(s, 0.100, (0.218 * side, 0.000, 0.572), scale=(0.32, 0.72, 1.22))
+        add_ball(s, 0.066, (0.244 * side, -0.020, 0.424), scale=(0.30, 0.70, 1.28))
+        add_ball(s, 0.026, (0.216 * side, -0.062, 0.336))                # thumb nub
 
-    # --- tail: long and sweeping down-back off the rump, the budgie's other big silhouette cue.
-    # Built from capsules rather than spaced balls: separate balls left gaps the voxel remesh
-    # turned into a detached blob floating behind him.
-    add_capsule(s, (0, 0.090, 0.520), (0, 0.230, 0.360), 0.080)
-    add_capsule(s, (0, 0.230, 0.360), (0, 0.330, 0.235), 0.055)
-    add_capsule(s, (0, 0.330, 0.235), (0, 0.395, 0.140), 0.036)
+    # --- tail: long, tapering, swept down and back off the rump
+    add_blend_chain(s, [
+        ((0, 0.090, 0.545), 0.076),
+        ((0, 0.225, 0.365), 0.050),
+        ((0, 0.372, 0.115), 0.024),
+    ])
 
     return fuse(s, voxel_size=MILO_VOXEL_SIZE)
 
@@ -341,14 +393,17 @@ def build_milo_base():
 # the head read as a face.
 PREVIEW_EYES = {
     "Zayn_Base": (0.063, (0.086, -0.248, 2.076), 0.032, (0.098, -0.294, 2.072)),
-    "Milo_Base": (0.062, (0.150, -0.170, 1.112), 0.032, (0.166, -0.218, 1.108)),
+    # Much smaller than the first attempt. Big round protruding eyeballs are the single
+    # clearest "compound eye" signal, and shrinking them and sinking them into the brow does
+    # more to kill the insect read than any body change.
+    "Milo_Base": (0.042, (0.106, -0.152, 1.146), 0.024, (0.114, -0.183, 1.143)),
 }
 
 CHARACTERS = {
     "zayn": {"build": build_zayn_base, "mesh": "Zayn_Base", "spread": 1.30,
              "target_z": 1.20, "cam_dist": 8.0},
-    "milo": {"build": build_milo_base, "mesh": "Milo_Base", "spread": 0.95,
-             "target_z": 0.70, "cam_dist": 5.2},
+    "milo": {"build": build_milo_base, "mesh": "Milo_Base", "spread": 0.80,
+             "target_z": 0.72, "cam_dist": 4.8},
 }
 
 

@@ -1,2 +1,5 @@
 __pycache__/
 *.pyc
+
+# Generated review page - regenerate rather than commit (embeds all renders as base64)
+MODEL_SHEET.html
