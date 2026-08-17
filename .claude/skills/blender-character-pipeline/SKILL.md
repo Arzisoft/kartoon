@@ -26,6 +26,40 @@ relevant reference file for the tool you're touching — don't load all of them 
 6. **Lip sync** — Rhubarb Lip Sync generates mouth-shape timing from a voice track. See
    [references/rhubarb-lipsync.md](references/rhubarb-lipsync.md).
 
+## Design theory & technique, learned from tutorials (2026-08-17)
+
+Distilled from free YouTube tutorials via `yt-dlp`-fetched auto-captions (transcripts only, no
+video downloaded) — not verbatim, corrected for obvious ASR errors. Read the relevant one
+before the next proportion or topology pass:
+
+- [references/chibi-proportion-theory.md](references/chibi-proportion-theory.md) — the design
+  theory behind toy/chibi character proportions (head:body ratio, pupil-vs-iris cuteness,
+  oversized props, miniature-photography camera tricks) that directly informed Zayn's
+  2026-08-17 leg-shortening/eye-enlarging pass.
+- [references/manual-sculpt-retopo.md](references/manual-sculpt-retopo.md) — a professional
+  manual sculpt + hand-retopology workflow (Crease brush, F2 add-on, Grid Fill) as the
+  higher-control alternative to our current AutoRemesher pass. NOTE: this requires the Blender
+  GUI (not headless-scriptable) — per project preference, avoid unless there's no scriptable
+  alternative; see the two entries below for the scriptable path instead.
+- [references/procedural-hand-geometry-nodes.md](references/procedural-hand-geometry-nodes.md)
+  — a fully `bpy`-scriptable Geometry Nodes technique for a clean-topology, per-joint-poseable
+  hand (no manual sculpting, no armature bones needed for the fingers). Not yet built — a real
+  engineering lift — but the correct alternative to `extremity_cap()` sphere-stack fingers when
+  we need posed/bent fingers for gesture animation.
+- [references/anthropomorphic-design-theory.md](references/anthropomorphic-design-theory.md) —
+  human/animal-blending design principles for bipedal animal characters (no manual technique,
+  pure design judgment). Confirms several of Zayn's existing design calls (visible eye whites,
+  mobile brow, added mouth, enlarged eyes) were the right ones per general anthro-design theory.
+- [references/procedural-iris-eye-texture.md](references/procedural-iris-eye-texture.md) — a
+  fully scriptable Gradient-Texture/ColorRamp technique for a real coloured iris ring + limbal
+  edge instead of a flat black pupil dot. Implemented 2026-08-17 as `_iris_pupil_material()` in
+  `base_body.py` — pure material swap, no geometry change.
+- [references/muzzle-drawing-technique.md](references/muzzle-drawing-technique.md) — a
+  medium-independent orb+cylinder shape breakdown for muzzles; mostly confirms our existing
+  construction, but flagged that our turnaround QA never checked the 3/4 angle specifically
+  (the angle most likely to expose muzzle volume problems) — a `"quarter"` (45°) view was added
+  to the `cycles_sss_test.py` render loop as a result.
+
 ## Project-specific lessons (learned the hard way this session — read before repeating)
 
 - **Don't guess raw coordinates against a mesh you can't see live.** Placing accent geometry

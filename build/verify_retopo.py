@@ -15,14 +15,14 @@ bpy.ops.wm.read_factory_settings(use_empty=True)
 tan = color_layer.matte_material("Zayn_Tan", (0.85, 0.64, 0.40))
 yellow = color_layer.matte_material("Milo_Yellow", (0.98, 0.82, 0.10))
 
-bpy.ops.wm.obj_import(filepath=os.path.join(RETOPO, "zayn_retopo.obj"))
+bpy.ops.wm.obj_import(filepath=os.path.join(RETOPO, "zayn_retopo.obj"), forward_axis='Y', up_axis='Z')
 zayn = bpy.context.selected_objects[0]
 zayn.name = "Zayn_Retopo"
 zayn.data.materials.append(tan)
 zayn.location = (-0.9, 0, 0)
 bpy.ops.object.shade_smooth()
 
-bpy.ops.wm.obj_import(filepath=os.path.join(RETOPO, "milo_retopo.obj"))
+bpy.ops.wm.obj_import(filepath=os.path.join(RETOPO, "milo_retopo.obj"), forward_axis='Y', up_axis='Z')
 milo = bpy.context.selected_objects[0]
 milo.name = "Milo_Retopo"
 milo.data.materials.append(yellow)

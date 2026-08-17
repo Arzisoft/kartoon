@@ -10,7 +10,7 @@ Smooth normal degrees: 0
 Adaptivity: 0.6
 
 Results:
-  Quads: 2139
-  Non-quads: 38
-  Vertices: 2200
-  Total time: 1.015 seconds
+  Quads: 2228
+  Non-quads: 20
+  Vertices: 2261
+  Total time: 1.026 seconds

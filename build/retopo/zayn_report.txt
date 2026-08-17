@@ -1,8 +1,8 @@
 AutoRemesher Report
 ===================
 
-Input file: C:/Users/Walid Baassiri/Desktop/kartoon/kartoon-show/build/retopo/zayn_raw.obj
-Output file: C:/Users/Walid Baassiri/Desktop/kartoon/kartoon-show/build/retopo/zayn_retopo.obj
+Input file: zayn_raw.obj
+Output file: zayn_retopo.obj
 Target quads: 6000
 Edge scaling: 1
 Sharp edge degrees: 90
@@ -10,7 +10,7 @@ Smooth normal degrees: 0
 Adaptivity: 0.6
 
 Results:
-  Quads: 3388
-  Non-quads: 38
-  Vertices: 3446
-  Total time: 1.151 seconds
+  Quads: 3057
+  Non-quads: 33
+  Vertices: 3110
+  Total time: 1.062 seconds

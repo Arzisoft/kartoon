@@ -19,7 +19,11 @@ for obj, name in [(zayn, "zayn_raw"), (milo, "milo_raw")]:
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
     path = os.path.join(export_dir, f"{name}.obj")
+    # forward_axis/up_axis explicitly matched to Blender's own convention (not the OBJ-
+    # standard default) so import doesn't apply an axis-conversion rotation -- that rotation
+    # is what scrambled hardcoded local-space eye coordinates when re-parented after import.
     bpy.ops.wm.obj_export(filepath=path, export_selected_objects=True,
-                           export_materials=False, export_triangulated_mesh=True)
+                           export_materials=False, export_triangulated_mesh=True,
+                           forward_axis='Y', up_axis='Z')
     print(f"EXPORTED:{path}")
     print(f"{name.upper()}_VERTS:{len(obj.data.vertices)}")
