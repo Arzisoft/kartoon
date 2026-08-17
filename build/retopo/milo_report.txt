@@ -1,0 +1,16 @@
+AutoRemesher Report
+===================
+
+Input file: C:/Users/Walid Baassiri/Desktop/kartoon/kartoon-show/build/retopo/milo_raw.obj
+Output file: C:/Users/Walid Baassiri/Desktop/kartoon/kartoon-show/build/retopo/milo_retopo.obj
+Target quads: 4000
+Edge scaling: 1
+Sharp edge degrees: 90
+Smooth normal degrees: 0
+Adaptivity: 0.6
+
+Results:
+  Quads: 2139
+  Non-quads: 38
+  Vertices: 2200
+  Total time: 1.015 seconds
