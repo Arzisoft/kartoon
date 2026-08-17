@@ -115,20 +115,20 @@ def fuse(scaffold, voxel_size=VOXEL_SIZE):
 # never drift out of the limbs they are supposed to deform. Sided joints are given for the
 # +X side; the -X side mirrors by negating x.
 ZAYN_JOINTS = {
-    "hip":       (0.16, 0.00, 0.58),
-    "knee":      (0.18, 0.00, 0.32),
-    "ankle":     (0.19, 0.00, 0.10),
-    "toe":       (0.19, -0.17, 0.055),
-    "pelvis":    (0.00, 0.00, 0.66),
-    "spine":     (0.00, 0.01, 0.93),
-    "chest":     (0.00, 0.02, 1.19),
-    "neck_base": (0.00, 0.04, 1.30),
-    "head_base": (0.00, -0.11, 1.79),
-    "head_top":  (0.00, -0.13, 2.12),
-    "shoulder":  (0.32, 0.02, 1.26),
-    "elbow":     (0.50, -0.02, 0.96),
-    "wrist":     (0.60, -0.06, 0.66),
-    "hand_end":  (0.65, -0.07, 0.50),
+    "hip":       (0.150, 0.02, 0.92),
+    "knee":      (0.170, 0.00, 0.52),
+    "ankle":     (0.180, 0.00, 0.16),
+    "toe":       (0.180, -0.12, 0.06),
+    "pelvis":    (0.000, 0.02, 1.00),
+    "spine":     (0.000, -0.02, 1.20),
+    "chest":     (0.000, 0.04, 1.42),
+    "neck_base": (0.000, 0.05, 1.50),
+    "head_base": (0.000, -0.08, 1.98),
+    "head_top":  (0.000, -0.14, 2.20),
+    "shoulder":  (0.240, 0.03, 1.42),
+    "elbow":     (0.360, -0.02, 1.14),
+    "wrist":     (0.420, -0.06, 0.86),
+    "hand_end":  (0.440, -0.07, 0.72),
 }
 
 
@@ -141,67 +141,84 @@ def joint(table, name, side=1):
 def build_zayn_base():
     """Upright camel base body, A-pose, facing -Y. Returns the single joined mesh object.
 
-    Species cues carried deliberately (production-notes: a stylised round character needs
-    1-2 unmistakable species markers or it reads as a generic blob):
-      * a large hump sitting high on the BACK, clearly separated from the head
-      * a long muzzle with a drooping split lip
-    The v2 quadruped failed this test — its short hump and long neck read as a llama.
+    Built to the cartoon-camel reference direction, which overrides the bible's original
+    "big round head, big low-set eyes" baby-schema note for this character. Those two are in
+    direct conflict: a big round head on a short neck with small low eyes produced something
+    that read as an insect, not a camel. Softness now comes from rounded forms and large eyes
+    rather than from skull size.
+
+    Four proportions carry the whole species read, in order of importance:
+      1. A LONG sweeping neck — roughly a quarter of total height. This is the camel's
+         defining line and the single biggest thing the previous version got wrong.
+      2. A SMALL head with a long tapering snout, not a ball.
+      3. One clear hump peak behind the shoulders, rising above the back line.
+      4. Lanky legs under a pear-shaped body — belly low and forward, chest narrow.
     """
     s = _scaffold("Zayn_Base")
 
     def J(name, side=1):
         return joint(ZAYN_JOINTS, name, side)
 
-    # --- legs: short and stubby, toddler proportion (feet on z=0)
+    # --- legs: long and thin, knobbly knee, hoof at the bottom
     for side in (1, -1):
-        add_capsule(s, J("hip", side), J("knee", side), 0.112)
-        add_capsule(s, J("knee", side), J("ankle", side), 0.095)
-        # foot, pushed forward (-Y) so he doesn't look like he's on stilts
-        add_ball(s, 0.125, (0.19 * side, -0.06, 0.075), scale=(0.85, 1.40, 0.55))
+        add_capsule(s, J("hip", side), J("knee", side), 0.082)
+        add_ball(s, 0.088, J("knee", side), scale=(0.9, 0.95, 1.05))   # knee joint
+        add_capsule(s, J("knee", side), J("ankle", side), 0.060)
+        # hoof: chunky and split-looking, planted slightly forward
+        add_ball(s, 0.098, (0.180 * side, -0.035, 0.070), scale=(0.90, 1.25, 0.70))
 
-    # --- pelvis + belly: round, no waist (baby schema)
-    add_ball(s, 0.28, J("pelvis"), scale=(1.05, 0.92, 0.85))
-    add_ball(s, 0.38, J("spine"), scale=(1.05, 0.95, 0.95))
-    # blend ball between belly and chest — without it the two masses leave a visible ridge
-    # now that smoothing is dialled down to protect the muzzle and ears
-    add_ball(s, 0.355, (0, 0.015, 1.07), scale=(1.08, 0.92, 0.90))
+    # --- body: PEAR. Belly low and pushed forward (-Y), chest narrow, so the back line runs
+    # up into the hump instead of the torso being one round blob.
+    add_ball(s, 0.245, J("pelvis"), scale=(1.02, 1.00, 0.95))
+    add_ball(s, 0.278, (0, -0.012, 1.10), scale=(1.01, 1.02, 1.00))     # pelvis-to-belly blend
+    add_ball(s, 0.300, (0, -0.030, 1.20), scale=(1.00, 1.05, 1.05))     # belly
+    add_ball(s, 0.284, (0, -0.008, 1.28), scale=(1.01, 1.00, 0.98))     # belly-to-chest blend
+    add_ball(s, 0.262, (0, 0.020, 1.36), scale=(1.02, 0.95, 0.92))      # lower chest
+    add_ball(s, 0.240, J("chest"), scale=(1.05, 0.90, 0.85))            # upper chest/shoulders
 
-    # --- chest/shoulders, kept narrow front-to-back so the hump behind it stays legible
-    add_ball(s, 0.33, J("chest"), scale=(1.12, 0.88, 0.80))
+    # --- HUMP: one clear peak sitting behind and above the shoulders, taller than it is wide
+    # so it reads as a peak rather than a ball bolted on. It has to break the back line
+    # decisively — a shy hump just looks like a hunch.
+    add_ball(s, 0.230, (0, 0.145, 1.58), scale=(0.95, 0.95, 1.10))
+    add_ball(s, 0.165, (0, 0.120, 1.75), scale=(0.85, 0.85, 0.95))      # peak of the hump
 
-    # --- HUMP: primary camel cue. Sits high on the back and overlaps the shoulder mass
-    # enough to grow out of it — pushed too far back it reads as a ball stuck on, too far
-    # forward and it disappears into a hunch.
-    add_ball(s, 0.275, (0, 0.175, 1.53), scale=(1.05, 0.90, 0.85))
+    # --- NECK: the defining camel line. Long, thick at the base, tapering upward, and swept
+    # forward so the head ends up well ahead of the hump.
+    add_capsule(s, (0, 0.050, 1.48), (0, -0.010, 1.72), 0.125)
+    add_capsule(s, (0, -0.010, 1.72), (0, -0.070, 1.94), 0.105)
 
-    # --- neck: long and clearly narrower than head and chest, leaning forward so the head
-    # sits ahead of the hump and a notch opens up between the two masses in profile.
-    add_capsule(s, J("neck_base"), J("head_base"), 0.108)
+    # --- head: SMALL. Roughly a third the radius the previous version used.
+    add_ball(s, 0.170, (0, -0.115, 2.020), scale=(1.00, 1.10, 1.00))
 
-    # --- head: big (baby schema) but smaller than v3 to make room for a visible neck
-    add_ball(s, 0.285, (0, -0.13, 1.96), scale=(1.0, 1.02, 0.95))
+    # --- snout: long and tapering forward and slightly down, ending in a soft nose. Length
+    # and taper are what say "camel"; a short blunt muzzle just reads as a nose.
+    add_ball(s, 0.135, (0, -0.270, 1.985), scale=(0.92, 1.15, 0.92))
+    add_ball(s, 0.110, (0, -0.390, 1.945), scale=(0.95, 1.05, 0.90))
+    add_ball(s, 0.092, (0, -0.470, 1.910), scale=(1.00, 0.95, 0.92))    # nose
+    add_ball(s, 0.070, (0, -0.455, 1.845), scale=(1.05, 0.90, 0.75))    # soft lower lip
 
-    # --- muzzle: long and dropping away from the head — the second camel cue.
-    # Length is what separates "camel" from "beak", so it runs well forward of the skull.
-    add_ball(s, 0.165, (0, -0.36, 1.87), scale=(0.88, 1.30, 0.82))
-    add_ball(s, 0.125, (0, -0.52, 1.81), scale=(0.92, 1.05, 0.80))
-    # drooping split lower lip
-    add_ball(s, 0.078, (0, -0.56, 1.73), scale=(1.10, 0.85, 0.80))
-
-    # --- ears: small, set wide and high enough to break the head silhouette
+    # --- brow ridges: give the big eyes something to sit on, and stop the head reading as a
+    # bare sphere. This is what makes eyes look set INTO a face rather than stuck on it.
     for side in (1, -1):
-        add_ball(s, 0.075, (0.235 * side, 0.0, 2.13), scale=(0.55, 0.75, 1.30))
+        add_ball(s, 0.080, (0.082 * side, -0.212, 2.078), scale=(0.95, 0.85, 0.80))
 
-    # --- arms in A-pose (~35 deg out from vertical), ending in mitten hands.
-    # Longer than v3 so the hands clear the belly and can actually hold a prop.
+    # --- ears: small and pointed, set back on top of the skull
     for side in (1, -1):
-        add_capsule(s, J("shoulder", side), J("elbow", side), 0.100)
-        add_capsule(s, J("elbow", side), J("wrist", side), 0.086)
-        # mitten hand: one mass + a thumb, enough to hold props and read as a hand
-        add_ball(s, 0.110, (0.635 * side, -0.07, 0.57), scale=(0.85, 1.05, 1.0))
-        add_ball(s, 0.052, (0.545 * side, -0.11, 0.59))
+        add_ball(s, 0.055, (0.125 * side, 0.010, 2.160), scale=(0.55, 0.70, 1.55))
 
-    return fuse(s)
+    # --- arms: long and thin like the legs, ending in a rounded hoof-mitten
+    for side in (1, -1):
+        add_capsule(s, J("shoulder", side), J("elbow", side), 0.086)
+        add_ball(s, 0.082, J("elbow", side))                            # elbow joint
+        add_capsule(s, J("elbow", side), J("wrist", side), 0.070)
+        add_ball(s, 0.096, (0.435 * side, -0.070, 0.745), scale=(0.90, 1.05, 1.10))
+        add_ball(s, 0.048, (0.370 * side, -0.108, 0.785))               # thumb nub
+
+    # --- tail: thin, hanging off the rump with a tuft at the end
+    add_capsule(s, (0, 0.190, 1.06), (0, 0.245, 0.82), 0.032)
+    add_ball(s, 0.062, (0, 0.255, 0.775), scale=(0.75, 0.85, 1.25))
+
+    return fuse(s, voxel_size=0.017)
 
 
 # ---------------------------------------------------------------------- Milo
@@ -313,14 +330,19 @@ def build_milo_base():
 # ------------------------------------------------------------ preview scene
 # Temporary eyes for judging the silhouette read. NOT part of the base mesh — the face is a
 # later layer (shape keys for expression + lip sync). Radius and position per character.
+#   sclera radius, sclera centre, pupil radius, pupil centre
+# The eyes get a WHITE sclera with a dark pupil rather than a solid dark bead. On a stylised
+# animal head that difference is not a detail: two solid dark dots read as insect eyes, and
+# every cartoon-camel reference has visible whites. It is the cheapest single fix for making
+# the head read as a face.
 PREVIEW_EYES = {
-    "Zayn_Base": (0.068, (0.138, -0.320, 1.930)),
-    "Milo_Base": (0.056, (0.158, -0.168, 1.110)),
+    "Zayn_Base": (0.063, (0.086, -0.248, 2.076), 0.032, (0.098, -0.294, 2.072)),
+    "Milo_Base": (0.062, (0.150, -0.170, 1.112), 0.032, (0.166, -0.218, 1.108)),
 }
 
 CHARACTERS = {
-    "zayn": {"build": build_zayn_base, "mesh": "Zayn_Base", "spread": 1.55,
-             "target_z": 1.15, "cam_dist": 8.5},
+    "zayn": {"build": build_zayn_base, "mesh": "Zayn_Base", "spread": 1.30,
+             "target_z": 1.20, "cam_dist": 8.0},
     "milo": {"build": build_milo_base, "mesh": "Milo_Base", "spread": 0.95,
              "target_z": 0.70, "cam_dist": 5.2},
 }
@@ -335,21 +357,35 @@ def _clay():
     return mat
 
 
-def _preview_eyes(mesh_name, parent):
-    radius, (ex, ey, ez) = PREVIEW_EYES[mesh_name]
-    mat = bpy.data.materials.get("PreviewEyeDark")
+def _eye_material(name, colour):
+    mat = bpy.data.materials.get(name)
     if mat is None:
-        mat = bpy.data.materials.new("PreviewEyeDark")
+        mat = bpy.data.materials.new(name)
         mat.use_nodes = True
-        mat.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (0.02, 0.02, 0.02, 1)
+        bsdf = mat.node_tree.nodes["Principled BSDF"]
+        bsdf.inputs["Base Color"].default_value = (*colour, 1.0)
+        bsdf.inputs["Roughness"].default_value = 0.25
+    return mat
+
+
+def _preview_eyes(mesh_name, parent):
+    sclera_r, (sx, sy, sz), pupil_r, (px, py, pz) = PREVIEW_EYES[mesh_name]
+    white = _eye_material("PreviewSclera", (0.97, 0.96, 0.94))
+    dark = _eye_material("PreviewPupil", (0.03, 0.03, 0.04))
+
     for side in (1, -1):
-        bpy.ops.mesh.primitive_uv_sphere_add(radius=radius, location=(ex * side, ey, ez),
-                                             segments=16, ring_count=8)
-        eye = bpy.context.active_object
-        eye.name = f"{mesh_name}_PreviewEye_{'L' if side > 0 else 'R'}"
-        eye.data.materials.append(mat)
-        bpy.ops.object.shade_smooth()
-        eye.parent = parent
+        tag = "L" if side > 0 else "R"
+        for label, radius, loc, mat in (
+            ("Sclera", sclera_r, (sx * side, sy, sz), white),
+            ("Pupil", pupil_r, (px * side, py, pz), dark),
+        ):
+            bpy.ops.mesh.primitive_uv_sphere_add(radius=radius, location=loc,
+                                                 segments=20, ring_count=10)
+            eye = bpy.context.active_object
+            eye.name = f"{mesh_name}_Preview{label}_{tag}"
+            eye.data.materials.append(mat)
+            bpy.ops.object.shade_smooth()
+            eye.parent = parent
 
 
 def _stage(target_z, cam_dist, res_x=1600, res_y=800):
