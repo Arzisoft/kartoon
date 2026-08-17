@@ -100,17 +100,27 @@ def build():
     blanket_mat = fabric_material("Zayn_Blanket_Fabric", (0.08, 0.52, 0.53))
     # Narrow enough to clear the shoulder joints (x=+-0.24 per ZAYN_JOINTS), sitting high on
     # the back near the hump rather than at mid-torso where it collided with the arms.
-    # Measured Zayn's actual mesh extent at z=1.28: x in [-0.404, 0.404], y in [-0.335, 0.275].
-    # Blanket half-extents must clearly exceed those to read as draped on the body, not
-    # swallowed inside it.
-    bpy.ops.mesh.primitive_cube_add(size=1.2, location=(0, 0.22, 1.28))
+    # Shrinkwrap-based: a flat, subdivided plane conforms to Zayn's actual body surface via
+    # the modifier, so it drapes correctly regardless of exact body proportions — no more
+    # guessing raw coordinates against a mesh whose real dimensions I don't have memorized.
+    bpy.ops.mesh.primitive_plane_add(size=0.85, location=(0, 0.05, 1.25),
+                                      rotation=(math.radians(35), 0, 0))
     blanket = bpy.context.active_object
     blanket.name = "Zayn_Blanket"
-    blanket.scale = (0.80, 0.55, 0.34)
+    blanket.scale = (1.0, 0.75, 1.0)
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.subdivide(number_cuts=6)
+    bpy.ops.object.mode_set(mode='OBJECT')
     blanket.data.materials.append(blanket_mat)
-    mod = blanket.modifiers.new("Subsurf", 'SUBSURF')
-    mod.levels = 2
-    mod.render_levels = 2
+
+    shrink = blanket.modifiers.new("Shrinkwrap", 'SHRINKWRAP')
+    shrink.target = zayn
+    shrink.wrap_method = 'NEAREST_SURFACEPOINT'
+    shrink.offset = 0.018
+
+    solid = blanket.modifiers.new("Solidify", 'SOLIDIFY')
+    solid.thickness = 0.03
+
     bpy.ops.object.select_all(action='DESELECT')
     blanket.select_set(True)
     bpy.context.view_layer.objects.active = blanket
