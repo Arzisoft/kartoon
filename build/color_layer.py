@@ -23,12 +23,21 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import base_body  # noqa: E402
 
 
-def matte_material(name, color, roughness=0.55):
+def matte_material(name, color, roughness=0.55, subsurface=0.35):
+    """Matte base + a soft subsurface-scattering pass — this is most of what separates
+    "Cocomelon-soft plush toy" from "flat-shaded plastic." SSS input names differ across
+    Blender versions, so this sets whichever set exists and no-ops otherwise."""
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True
     bsdf = mat.node_tree.nodes["Principled BSDF"]
     bsdf.inputs["Base Color"].default_value = (*color, 1.0)
     bsdf.inputs["Roughness"].default_value = roughness
+    for weight_key in ("Subsurface Weight", "Subsurface"):
+        if weight_key in bsdf.inputs:
+            bsdf.inputs[weight_key].default_value = subsurface
+            break
+    if "Subsurface Radius" in bsdf.inputs:
+        bsdf.inputs["Subsurface Radius"].default_value = (0.4, 0.2, 0.12)
     return mat
 
 
