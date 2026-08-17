@@ -105,6 +105,34 @@ def fuse(scaffold):
 
 
 # ---------------------------------------------------------------------- Zayn
+# Single source of truth for Zayn's joint positions, in construction space (facing -Y, feet
+# on z=0). Both the base mesh below and the skeleton in rig.py read these, so the bones can
+# never drift out of the limbs they are supposed to deform. Sided joints are given for the
+# +X side; the -X side mirrors by negating x.
+ZAYN_JOINTS = {
+    "hip":       (0.16, 0.00, 0.58),
+    "knee":      (0.18, 0.00, 0.32),
+    "ankle":     (0.19, 0.00, 0.10),
+    "toe":       (0.19, -0.17, 0.055),
+    "pelvis":    (0.00, 0.00, 0.66),
+    "spine":     (0.00, 0.01, 0.93),
+    "chest":     (0.00, 0.02, 1.19),
+    "neck_base": (0.00, 0.04, 1.30),
+    "head_base": (0.00, -0.11, 1.79),
+    "head_top":  (0.00, -0.13, 2.12),
+    "shoulder":  (0.32, 0.02, 1.26),
+    "elbow":     (0.50, -0.02, 0.96),
+    "wrist":     (0.60, -0.06, 0.66),
+    "hand_end":  (0.65, -0.07, 0.50),
+}
+
+
+def joint(name, side=1):
+    """Joint position, mirrored to the -X side when side is -1."""
+    x, y, z = ZAYN_JOINTS[name]
+    return (x * side, y, z)
+
+
 def build_zayn_base():
     """Upright camel base body, A-pose, facing -Y. Returns the single joined mesh object.
 
@@ -118,20 +146,20 @@ def build_zayn_base():
 
     # --- legs: short and stubby, toddler proportion (feet on z=0)
     for side in (1, -1):
-        add_capsule(s, (0.16 * side, 0, 0.58), (0.18 * side, 0, 0.32), 0.112)
-        add_capsule(s, (0.18 * side, 0, 0.32), (0.19 * side, 0, 0.10), 0.095)
+        add_capsule(s, joint("hip", side), joint("knee", side), 0.112)
+        add_capsule(s, joint("knee", side), joint("ankle", side), 0.095)
         # foot, pushed forward (-Y) so he doesn't look like he's on stilts
         add_ball(s, 0.125, (0.19 * side, -0.06, 0.075), scale=(0.85, 1.40, 0.55))
 
     # --- pelvis + belly: round, no waist (baby schema)
-    add_ball(s, 0.28, (0, 0, 0.66), scale=(1.05, 0.92, 0.85))
-    add_ball(s, 0.38, (0, 0.01, 0.93), scale=(1.05, 0.95, 0.95))
+    add_ball(s, 0.28, joint("pelvis"), scale=(1.05, 0.92, 0.85))
+    add_ball(s, 0.38, joint("spine"), scale=(1.05, 0.95, 0.95))
     # blend ball between belly and chest — without it the two masses leave a visible ridge
     # now that smoothing is dialled down to protect the muzzle and ears
     add_ball(s, 0.355, (0, 0.015, 1.07), scale=(1.08, 0.92, 0.90))
 
     # --- chest/shoulders, kept narrow front-to-back so the hump behind it stays legible
-    add_ball(s, 0.33, (0, 0.02, 1.19), scale=(1.12, 0.88, 0.80))
+    add_ball(s, 0.33, joint("chest"), scale=(1.12, 0.88, 0.80))
 
     # --- HUMP: primary camel cue. Sits high on the back and overlaps the shoulder mass
     # enough to grow out of it — pushed too far back it reads as a ball stuck on, too far
@@ -140,7 +168,7 @@ def build_zayn_base():
 
     # --- neck: long and clearly narrower than head and chest, leaning forward so the head
     # sits ahead of the hump and a notch opens up between the two masses in profile.
-    add_capsule(s, (0, 0.04, 1.30), (0, -0.11, 1.79), 0.108)
+    add_capsule(s, joint("neck_base"), joint("head_base"), 0.108)
 
     # --- head: big (baby schema) but smaller than v3 to make room for a visible neck
     add_ball(s, 0.285, (0, -0.13, 1.96), scale=(1.0, 1.02, 0.95))
@@ -159,8 +187,8 @@ def build_zayn_base():
     # --- arms in A-pose (~35 deg out from vertical), ending in mitten hands.
     # Longer than v3 so the hands clear the belly and can actually hold a prop.
     for side in (1, -1):
-        add_capsule(s, (0.32 * side, 0.02, 1.26), (0.50 * side, -0.02, 0.96), 0.100)
-        add_capsule(s, (0.50 * side, -0.02, 0.96), (0.60 * side, -0.06, 0.66), 0.086)
+        add_capsule(s, joint("shoulder", side), joint("elbow", side), 0.100)
+        add_capsule(s, joint("elbow", side), joint("wrist", side), 0.086)
         # mitten hand: one mass + a thumb, enough to hold props and read as a hand
         add_ball(s, 0.110, (0.635 * side, -0.07, 0.57), scale=(0.85, 1.05, 1.0))
         add_ball(s, 0.052, (0.545 * side, -0.11, 0.59))
