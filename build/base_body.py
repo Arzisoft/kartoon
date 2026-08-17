@@ -124,7 +124,11 @@ ZAYN_JOINTS = {
     "chest":     (0.000, 0.04, 1.42),
     "neck_base": (0.000, 0.05, 1.50),
     "head_base": (0.000, -0.08, 1.98),
-    "head_top":  (0.000, -0.14, 2.20),
+    # The head bone runs FORWARD along the snout rather than up through the skull. On a
+    # long-snouted animal a vertical head bone leaves the snout closer to the neck bone than
+    # to the head bone, so automatic weights hand the muzzle to the neck and the face mangles
+    # the moment the head turns.
+    "head_top":  (0.000, -0.44, 1.94),
     "shoulder":  (0.240, 0.03, 1.42),
     "elbow":     (0.360, -0.02, 1.14),
     "wrist":     (0.420, -0.06, 0.86),
@@ -368,11 +372,14 @@ def _eye_material(name, colour):
     return mat
 
 
-def _preview_eyes(mesh_name, parent):
+def _preview_eyes(mesh_name, parent=None):
+    """Build the preview eyes and return them. Pass parent=None when the caller wants to
+    attach them itself — the rig bone-parents them to the head bone so they follow a pose."""
     sclera_r, (sx, sy, sz), pupil_r, (px, py, pz) = PREVIEW_EYES[mesh_name]
     white = _eye_material("PreviewSclera", (0.97, 0.96, 0.94))
     dark = _eye_material("PreviewPupil", (0.03, 0.03, 0.04))
 
+    made = []
     for side in (1, -1):
         tag = "L" if side > 0 else "R"
         for label, radius, loc, mat in (
@@ -385,7 +392,10 @@ def _preview_eyes(mesh_name, parent):
             eye.name = f"{mesh_name}_Preview{label}_{tag}"
             eye.data.materials.append(mat)
             bpy.ops.object.shade_smooth()
-            eye.parent = parent
+            if parent is not None:
+                eye.parent = parent
+            made.append(eye)
+    return made
 
 
 def _stage(target_z, cam_dist, res_x=1600, res_y=800):

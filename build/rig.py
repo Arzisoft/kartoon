@@ -28,6 +28,7 @@ import bpy
 import math
 import os
 import sys
+from mathutils import Matrix
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import base_body  # noqa: E402
@@ -126,8 +127,8 @@ WAVE_POSE = {
     "upper_arm.L": (0, 0, -115),
     "forearm.L": (0, 0, -45),
     "hand.L": (0, 0, -15),
-    "head": (-10, 25, 0),
-    "neck": (-5, 10, 0),
+    "head": (0, 0, -22),
+    "neck": (-6, 0, -10),
     "thigh.R": (18, 0, 0),
     "shin.R": (-25, 0, 0),
     "spine": (0, 0, -5),
@@ -146,12 +147,29 @@ MILO_LOOK_UP_POSE = {
 
 RIGS = {
     "zayn": {"build": base_body.build_zayn_base, "joints": base_body.ZAYN_JOINTS,
-             "rig_name": "Zayn_Rig", "pose": WAVE_POSE, "spread": 1.15,
-             "target_z": 1.15, "cam_dist": 7.5},
+             "rig_name": "Zayn_Rig", "mesh": "Zayn_Base", "pose": WAVE_POSE, "spread": 1.05,
+             "target_z": 1.25, "cam_dist": 7.5},
     "milo": {"build": base_body.build_milo_base, "joints": base_body.MILO_JOINTS,
-             "rig_name": "Milo_Rig", "pose": MILO_LOOK_UP_POSE, "spread": 0.72,
-             "target_z": 0.70, "cam_dist": 4.6},
+             "rig_name": "Milo_Rig", "mesh": "Milo_Base", "pose": MILO_LOOK_UP_POSE,
+             "spread": 0.72, "target_z": 0.70, "cam_dist": 4.6},
 }
+
+
+def attach_preview_eyes(mesh_name, arm_obj, bone="head"):
+    """Rigidly parent the preview eyes to the head bone so they travel with a pose.
+
+    Eyes are the difference between a head reading as a face and reading as a blank lump, so
+    the rig renders are close to unjudgeable without them. They stay rigid single-bone
+    parented on purpose — eyeballs should not deform — and they remain preview-only until the
+    face layer replaces them.
+    """
+    for eye in base_body._preview_eyes(mesh_name, parent=None):
+        world = eye.matrix_world.copy()
+        eye.parent = arm_obj
+        eye.parent_type = 'BONE'
+        eye.parent_bone = bone
+        eye.matrix_parent_inverse = Matrix.Identity(4)
+        eye.matrix_world = world
 
 
 def build_rigged(which):
@@ -162,6 +180,7 @@ def build_rigged(which):
     groups = skin(body, arm_obj)
     print(f"{which.upper()}_VERTEX_GROUPS:{groups} BONES:{len(arm_obj.data.bones)}")
     body.data.materials.append(base_body._clay())
+    attach_preview_eyes(spec["mesh"], arm_obj)
     return body, arm_obj
 
 
