@@ -24,17 +24,17 @@ import os
 from mathutils import Vector
 
 # ---------------------------------------------------------------- proportions
-# Heights are the one thing that must differ per character. Zayn reads as the big,
+# Heights are the one thing that must differ per character. Kamel reads as the big,
 # calm one; Milo (later) is built to roughly 0.6x this so the two-shot silhouette
 # contrast survives. Head is deliberately ~1/3 of total height (baby schema).
-ZAYN_HEIGHT = 2.20
-MILO_HEIGHT = 1.36  # ~0.62x Zayn: big/calm vs. small/quick has to read instantly in a two-shot
+KAMEL_HEIGHT = 2.05  # was 2.20 -- legs shortened ~20% for toy/chibi appeal (see build_kamel_base)
+MILO_HEIGHT = 1.36  # ~0.62x Kamel: big/calm vs. small/quick has to read instantly in a two-shot
 
 # Remesh/smoothing settings are a species-read tradeoff, not just a quality dial: too coarse a
 # voxel or too much smoothing melts the neck, ears and muzzle into the body mass and the
 # character stops reading as a camel at all.
 # Voxel size is ABSOLUTE, so a smaller character needs a smaller voxel to keep the same level
-# of detail — Milo's beak is roughly a third the size of Zayn's muzzle and dissolves at Zayn's
+# of detail — Milo's beak is roughly a third the size of Kamel's muzzle and dissolves at Kamel's
 # setting.
 VOXEL_SIZE = 0.022
 MILO_VOXEL_SIZE = 0.013
@@ -50,7 +50,7 @@ def _scaffold(name):
 def _track(scaffold, obj):
     # Bake each primitive's location/rotation/scale straight into its mesh data. Without this,
     # join() adopts the *first* part's transform as the joined origin and silently offsets the
-    # whole character (an early version of this sank Zayn 2.2m through the floor). With every
+    # whole character (an early version of this sank Kamel 2.2m through the floor). With every
     # part at an identity transform, the joined mesh's local coordinates are exactly the
     # construction coordinates and the origin lands on world (0,0,0).
     bpy.ops.object.select_all(action='DESELECT')
@@ -109,30 +109,35 @@ def fuse(scaffold, voxel_size=VOXEL_SIZE):
     return body
 
 
-# ---------------------------------------------------------------------- Zayn
-# Single source of truth for Zayn's joint positions, in construction space (facing -Y, feet
+# ---------------------------------------------------------------------- Kamel
+# Single source of truth for Kamel's joint positions, in construction space (facing -Y, feet
 # on z=0). Both the base mesh below and the skeleton in rig.py read these, so the bones can
 # never drift out of the limbs they are supposed to deform. Sided joints are given for the
 # +X side; the -X side mirrors by negating x.
-ZAYN_JOINTS = {
-    "hip":       (0.150, 0.02, 0.92),
-    "knee":      (0.170, 0.00, 0.52),
+# Legs shortened ~20% (thigh+shin span 0.76 -> 0.61) and the whole upper body dropped 0.15 to
+# sit on them -- a pure "shorten the legs, keep everything above as authored" move, which is
+# the lowest-risk way to push toward toy/chibi head-to-body proportions without touching the
+# long neck / small head / long snout that this file's docstring identifies as the actual
+# camel species-read (those stay exactly as long, proportionally, as before).
+KAMEL_JOINTS = {
+    "hip":       (0.150, 0.02, 0.77),
+    "knee":      (0.170, 0.00, 0.445),
     "ankle":     (0.180, 0.00, 0.16),
     "toe":       (0.180, -0.12, 0.06),
-    "pelvis":    (0.000, 0.02, 1.00),
-    "spine":     (0.000, -0.02, 1.20),
-    "chest":     (0.000, 0.04, 1.42),
-    "neck_base": (0.000, 0.05, 1.50),
-    "head_base": (0.000, -0.08, 1.98),
+    "pelvis":    (0.000, 0.02, 0.85),
+    "spine":     (0.000, -0.02, 1.05),
+    "chest":     (0.000, 0.04, 1.27),
+    "neck_base": (0.000, 0.05, 1.35),
+    "head_base": (0.000, -0.08, 1.83),
     # The head bone runs FORWARD along the snout rather than up through the skull. On a
     # long-snouted animal a vertical head bone leaves the snout closer to the neck bone than
     # to the head bone, so automatic weights hand the muzzle to the neck and the face mangles
     # the moment the head turns.
-    "head_top":  (0.000, -0.44, 1.94),
-    "shoulder":  (0.240, 0.03, 1.42),
-    "elbow":     (0.360, -0.02, 1.14),
-    "wrist":     (0.420, -0.06, 0.86),
-    "hand_end":  (0.440, -0.07, 0.72),
+    "head_top":  (0.000, -0.44, 1.79),
+    "shoulder":  (0.240, 0.03, 1.27),
+    "elbow":     (0.360, -0.02, 0.99),
+    "wrist":     (0.420, -0.06, 0.71),
+    "hand_end":  (0.440, -0.07, 0.57),
 }
 
 
@@ -142,7 +147,7 @@ def joint(table, name, side=1):
     return (x * side, y, z)
 
 
-def build_zayn_base():
+def build_kamel_base():
     """Upright camel base body, A-pose, facing -Y. Returns the single joined mesh object.
 
     Built to the cartoon-camel reference direction, which overrides the bible's original
@@ -158,76 +163,86 @@ def build_zayn_base():
       3. One clear hump peak behind the shoulders, rising above the back line.
       4. Lanky legs under a pear-shaped body — belly low and forward, chest narrow.
     """
-    s = _scaffold("Zayn_Base")
+    s = _scaffold("Kamel_Base")
 
     def J(name, side=1):
-        return joint(ZAYN_JOINTS, name, side)
+        return joint(KAMEL_JOINTS, name, side)
 
-    # --- legs: long and thin, knobbly knee, hoof at the bottom
+    # --- legs: shorter and a touch thicker than before (chibi/toy proportions), knobbly
+    # knee, hoof at the bottom
     for side in (1, -1):
-        add_capsule(s, J("hip", side), J("knee", side), 0.082)
-        add_ball(s, 0.088, J("knee", side), scale=(0.9, 0.95, 1.05))   # knee joint
-        add_capsule(s, J("knee", side), J("ankle", side), 0.060)
-        # hoof: chunky and split-looking, planted slightly forward
-        add_ball(s, 0.098, (0.180 * side, -0.035, 0.070), scale=(0.90, 1.25, 0.70))
+        add_capsule(s, J("hip", side), J("knee", side), 0.068)
+        add_ball(s, 0.075, J("knee", side), scale=(0.9, 0.95, 1.05))   # knee joint
+        add_capsule(s, J("knee", side), J("ankle", side), 0.053)
+        # Hoof ball removed from the fused body -- now added as a separate solid-colour
+        # object in color_layer.py (extremity_cap()) so it can be dark brown without the
+        # face-selection jagged-edge problem. Position/size here for reference:
+        # add_ball(s, 0.098, (0.180 * side, -0.035, 0.070), scale=(0.90, 1.25, 0.70))
 
     # --- body: PEAR. Belly low and pushed forward (-Y), chest narrow, so the back line runs
     # up into the hump instead of the torso being one round blob.
-    add_ball(s, 0.245, J("pelvis"), scale=(1.02, 1.00, 0.95))
-    add_ball(s, 0.278, (0, -0.012, 1.10), scale=(1.01, 1.02, 1.00))     # pelvis-to-belly blend
-    add_ball(s, 0.300, (0, -0.030, 1.20), scale=(1.00, 1.05, 1.05))     # belly
-    add_ball(s, 0.284, (0, -0.008, 1.28), scale=(1.01, 1.00, 0.98))     # belly-to-chest blend
-    add_ball(s, 0.262, (0, 0.020, 1.36), scale=(1.02, 0.95, 0.92))      # lower chest
+    # Belly shrunk ~18% -- was reading too round/heavy.
+    add_ball(s, 0.205, J("pelvis"), scale=(1.02, 1.00, 0.95))
+    add_ball(s, 0.232, (0, -0.012, 0.95), scale=(1.01, 1.02, 1.00))     # pelvis-to-belly blend
+    add_ball(s, 0.245, (0, -0.030, 1.05), scale=(1.00, 1.05, 1.05))     # belly
+    add_ball(s, 0.232, (0, -0.008, 1.13), scale=(1.01, 1.00, 0.98))     # belly-to-chest blend
+    add_ball(s, 0.215, (0, 0.020, 1.21), scale=(1.02, 0.95, 0.92))      # lower chest
     add_ball(s, 0.240, J("chest"), scale=(1.05, 0.90, 0.85))            # upper chest/shoulders
 
     # --- HUMP: one clear peak sitting behind and above the shoulders, taller than it is wide
     # so it reads as a peak rather than a ball bolted on. It has to break the back line
     # decisively — a shy hump just looks like a hunch.
-    add_ball(s, 0.230, (0, 0.145, 1.58), scale=(0.95, 0.95, 1.10))
-    add_ball(s, 0.165, (0, 0.120, 1.75), scale=(0.85, 0.85, 0.95))      # peak of the hump
+    # Shrunk ~25% -- was reading too large/dominant on the back.
+    add_ball(s, 0.175, (0, 0.130, 1.41), scale=(0.95, 0.95, 1.05))
+    add_ball(s, 0.125, (0, 0.110, 1.55), scale=(0.85, 0.85, 0.92))      # peak of the hump
 
     # --- NECK: the defining camel line. Long, thick at the base, tapering upward, and swept
     # forward so the head ends up well ahead of the hump.
-    add_capsule(s, (0, 0.050, 1.48), (0, -0.010, 1.72), 0.125)
-    add_capsule(s, (0, -0.010, 1.72), (0, -0.070, 1.94), 0.105)
+    add_capsule(s, (0, 0.050, 1.33), (0, -0.010, 1.57), 0.125)
+    add_capsule(s, (0, -0.010, 1.57), (0, -0.070, 1.79), 0.105)
 
-    # --- head: SMALL. Roughly a third the radius the previous version used.
-    add_ball(s, 0.170, (0, -0.115, 2.020), scale=(1.00, 1.10, 1.00))
+    # --- head: enlarged ~10% from the previous "small" pass -- still small relative to the
+    # body (not a return to the round-head/insect look), but a touch more presence to balance
+    # the shorter legs. Most of the appeal work is the eyes below, per the file's own note that
+    # softness should come from rounded forms and large eyes, not skull size.
+    add_ball(s, 0.187, (0, -0.115, 1.870), scale=(1.00, 1.10, 1.00))
 
     # --- snout: long and tapering forward and slightly down, ending in a soft nose. Length
     # and taper are what say "camel"; a short blunt muzzle just reads as a nose.
-    add_ball(s, 0.135, (0, -0.270, 1.985), scale=(0.92, 1.15, 0.92))
-    add_ball(s, 0.110, (0, -0.390, 1.945), scale=(0.95, 1.05, 0.90))
-    add_ball(s, 0.092, (0, -0.470, 1.910), scale=(1.00, 0.95, 0.92))    # nose
-    add_ball(s, 0.070, (0, -0.455, 1.845), scale=(1.05, 0.90, 0.75))    # soft lower lip
+    add_ball(s, 0.135, (0, -0.270, 1.835), scale=(0.92, 1.15, 0.92))
+    add_ball(s, 0.110, (0, -0.390, 1.795), scale=(0.95, 1.05, 0.90))
+    add_ball(s, 0.092, (0, -0.470, 1.760), scale=(1.00, 0.95, 0.92))    # nose
+    add_ball(s, 0.070, (0, -0.455, 1.695), scale=(1.05, 0.90, 0.75))    # soft lower lip
 
     # --- brow ridges: give the big eyes something to sit on, and stop the head reading as a
     # bare sphere. This is what makes eyes look set INTO a face rather than stuck on it.
     for side in (1, -1):
-        add_ball(s, 0.080, (0.082 * side, -0.212, 2.078), scale=(0.95, 0.85, 0.80))
+        add_ball(s, 0.080, (0.082 * side, -0.212, 1.928), scale=(0.95, 0.85, 0.80))
 
     # --- ears: small and pointed, set back on top of the skull
     for side in (1, -1):
-        add_ball(s, 0.055, (0.125 * side, 0.010, 2.160), scale=(0.55, 0.70, 1.55))
+        add_ball(s, 0.055, (0.125 * side, 0.010, 2.010), scale=(0.55, 0.70, 1.55))
 
-    # --- arms: long and thin like the legs, ending in a rounded hoof-mitten
+    # --- arms: shorter/thicker to match the legs, ending in a rounded hoof-mitten
     for side in (1, -1):
-        add_capsule(s, J("shoulder", side), J("elbow", side), 0.086)
-        add_ball(s, 0.082, J("elbow", side))                            # elbow joint
-        add_capsule(s, J("elbow", side), J("wrist", side), 0.070)
-        add_ball(s, 0.096, (0.435 * side, -0.070, 0.745), scale=(0.90, 1.05, 1.10))
-        add_ball(s, 0.048, (0.370 * side, -0.108, 0.785))               # thumb nub
+        add_capsule(s, J("shoulder", side), J("elbow", side), 0.063)
+        add_ball(s, 0.060, J("elbow", side))                            # elbow joint
+        add_capsule(s, J("elbow", side), J("wrist", side), 0.050)
+        # Hand ball + thumb nub removed from the fused body -- now a separate solid-colour
+        # object (extremity_cap() in color_layer.py). Position/size for reference:
+        # add_ball(s, 0.072, (0.435 * side, -0.070, 0.745), scale=(0.90, 1.05, 1.10))
+        # add_ball(s, 0.048, (0.370 * side, -0.108, 0.785))               # thumb nub
 
     # --- tail: thin, hanging off the rump with a tuft at the end
-    add_capsule(s, (0, 0.190, 1.06), (0, 0.245, 0.82), 0.032)
-    add_ball(s, 0.062, (0, 0.255, 0.775), scale=(0.75, 0.85, 1.25))
+    add_capsule(s, (0, 0.190, 0.91), (0, 0.245, 0.67), 0.032)
+    add_ball(s, 0.062, (0, 0.255, 0.625), scale=(0.75, 0.85, 1.25))
 
     return fuse(s, voxel_size=0.017)
 
 
 # ---------------------------------------------------------------------- Milo
-# Same joint NAMES as Zayn — that is what lets one motion clip play on both and what lets
-# humanoid motion retarget onto either. Only the positions differ: Milo is ~0.62x Zayn's
+# Same joint NAMES as Kamel — that is what lets one motion clip play on both and what lets
+# humanoid motion retarget onto either. Only the positions differ: Milo is ~0.62x Kamel's
 # height with a proportionally bigger head, a much shorter neck, and wings where the arms go.
 MILO_JOINTS = {
     "hip":       (0.095, 0.00, 0.395),
@@ -274,8 +289,9 @@ def build_milo_base():
     for side in (1, -1):
         add_capsule(s, J("hip", side), J("knee", side), 0.048)
         add_capsule(s, J("knee", side), J("ankle", side), 0.040)
-        # foot, splayed forward like a perching bird's
-        add_ball(s, 0.062, (0.110 * side, -0.055, 0.038), scale=(0.80, 1.70, 0.45))
+        # Foot ball removed from the fused body -- now a separate solid-colour object
+        # (extremity_cap() in color_layer.py). Position/size for reference:
+        # add_ball(s, 0.062, (0.110 * side, -0.055, 0.038), scale=(0.80, 1.70, 0.45))
 
     # --- body: one continuous egg, widest low down. Budgies have no visible waist or hips.
     add_ball(s, 0.155, J("pelvis"), scale=(1.02, 0.95, 0.90))
@@ -283,10 +299,10 @@ def build_milo_base():
     add_ball(s, 0.195, J("chest"), scale=(1.05, 0.95, 0.95))
 
     # --- neck: barely there. A budgie's head sits almost straight on the body, and this is
-    # a big part of what separates the small/quick read from Zayn's long-necked calm.
+    # a big part of what separates the small/quick read from Kamel's long-necked calm.
     add_capsule(s, J("neck_base"), J("head_base"), 0.105)
 
-    # --- head: proportionally larger than Zayn's (baby schema pushed further on the small one)
+    # --- head: proportionally larger than Kamel's (baby schema pushed further on the small one)
     add_ball(s, 0.235, (0, -0.02, 1.085), scale=(1.0, 1.0, 0.98))
 
     # --- BEAK: primary budgie cue. Short, deep and hooked DOWNWARD — the hook is the whole
@@ -313,13 +329,18 @@ def build_milo_base():
     # --- wings-as-arms: a flattened plate running along each arm chain, plus a mitten hand
     # at the tip so Milo can actually hold and point.
     for side in (1, -1):
-        add_capsule(s, J("shoulder", side), J("elbow", side), 0.058)
-        add_capsule(s, J("elbow", side), J("wrist", side), 0.048)
-        # the wing plate: thin across X, broad in Z, so it reads as a folded wing in profile
-        add_ball(s, 0.150, (0.280 * side, 0.010, 0.590), scale=(0.34, 0.70, 1.45))
-        # mitten hand at the wing tip
-        add_ball(s, 0.058, (0.350 * side, -0.035, 0.255), scale=(0.85, 1.05, 1.0))
-        add_ball(s, 0.030, (0.300 * side, -0.065, 0.275))
+        # Thinned from the original (0.058/0.048 capsules + a 0.150-radius "wing plate" ball)
+        # -- the wing plate bulged mid-arm and read as a bicep, not a folded wing. Dora-the-
+        # Explorer-style reference wants thin simple limbs, so the wing suggestion now comes
+        # from a much smaller, subtler plate instead of a dominant mid-arm mass.
+        add_capsule(s, J("shoulder", side), J("elbow", side), 0.034)
+        add_capsule(s, J("elbow", side), J("wrist", side), 0.026)
+        # subtle wing plate: small and tucked, not a dominant bulge
+        add_ball(s, 0.075, (0.280 * side, 0.010, 0.590), scale=(0.30, 0.60, 1.25))
+        # Mitten hand removed from the fused body -- now a separate solid-colour object
+        # (extremity_cap() in color_layer.py). Position/size for reference:
+        # add_ball(s, 0.050, (0.350 * side, -0.035, 0.255), scale=(0.85, 1.05, 1.0))
+        # add_ball(s, 0.026, (0.300 * side, -0.065, 0.275))
 
     # --- tail: long and sweeping down-back off the rump, the budgie's other big silhouette cue.
     # Built from capsules rather than spaced balls: separate balls left gaps the voxel remesh
@@ -340,12 +361,19 @@ def build_milo_base():
 # every cartoon-camel reference has visible whites. It is the cheapest single fix for making
 # the head read as a face.
 PREVIEW_EYES = {
-    "Zayn_Base": (0.063, (0.086, -0.248, 2.076), 0.032, (0.098, -0.294, 2.072)),
+    # Enlarged ~25% (0.063->0.080 sclera) for more expressive/toddler-appeal eyes -- the
+    # documented mechanism in build_kamel_base for adding cuteness without growing the skull.
+    # z shifted -0.15 to match the whole upper body dropping onto the shortened legs.
+    # Pupil grown 0.040->0.050 (ratio 0.5->0.625 of sclera) per chibi-proportion-theory.md:
+    # pupil-to-sclera ratio reads as "cute" more than iris/sclera size alone (why big-pupilled
+    # animals like cats look cute). Kept below ~0.7 so a visible white ring survives around the
+    # pupil -- the file's own note above warns solid dark eyes read as insect eyes.
+    "Kamel_Base": (0.080, (0.086, -0.248, 1.926), 0.050, (0.098, -0.294, 1.922)),
     "Milo_Base": (0.062, (0.150, -0.170, 1.112), 0.032, (0.166, -0.218, 1.108)),
 }
 
 CHARACTERS = {
-    "zayn": {"build": build_zayn_base, "mesh": "Zayn_Base", "spread": 1.30,
+    "kamel": {"build": build_kamel_base, "mesh": "Kamel_Base", "spread": 1.30,
              "target_z": 1.20, "cam_dist": 8.0},
     "milo": {"build": build_milo_base, "mesh": "Milo_Base", "spread": 0.95,
              "target_z": 0.70, "cam_dist": 5.2},
@@ -372,12 +400,66 @@ def _eye_material(name, colour):
     return mat
 
 
+def _iris_pupil_material(name, iris_color, pupil_color=(0.03, 0.03, 0.04)):
+    """The pupil sphere used to be a single flat dark colour -- no iris at all, which is why
+    the eyes read as plain black dots with no colour. Real (and most stylised) eyes show a
+    coloured iris ring around the pupil. Technique from a procedural-cartoon-eye tutorial: a
+    spherical Gradient Texture (Object coordinates, no UVs needed) centred on this sphere's own
+    origin creates concentric rings outward from the centre -- a ColorRamp turns the inner rings
+    black (pupil) and the outer rings the iris colour, with a darker limbal ring right at the
+    edge for definition. A little Noise breaks up the iris into fine streaks instead of a flat
+    disc of colour.
+    """
+    mat = bpy.data.materials.get(name)
+    if mat is not None:
+        return mat
+    mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    nt = mat.node_tree
+    bsdf = nt.nodes["Principled BSDF"]
+    bsdf.inputs["Roughness"].default_value = 0.12  # glossy -- eyes should catch a highlight
+
+    coord = nt.nodes.new("ShaderNodeTexCoord")
+    gradient = nt.nodes.new("ShaderNodeTexGradient")
+    gradient.gradient_type = 'SPHERICAL'
+    nt.links.new(coord.outputs["Object"], gradient.inputs["Vector"])
+
+    ramp = nt.nodes.new("ShaderNodeValToRGB")
+    cr = ramp.color_ramp
+    cr.elements[0].position = 0.0
+    cr.elements[0].color = (*pupil_color, 1.0)
+    pupil_edge = cr.elements.new(0.30)      # pupil stays solid black out to here
+    pupil_edge.color = (*pupil_color, 1.0)
+    iris_start = cr.elements.new(0.42)      # sharp pupil->iris transition
+    iris_start.color = (*iris_color, 1.0)
+    limbal = tuple(c * 0.45 for c in iris_color)  # darker ring right at the iris's outer edge
+    cr.elements[1].position = 1.0
+    cr.elements[1].color = (*limbal, 1.0)
+    nt.links.new(gradient.outputs["Fac"], ramp.inputs["Fac"])
+
+    # subtle noise streaks across the iris band only, so it doesn't read as a flat sticker
+    noise = nt.nodes.new("ShaderNodeTexNoise")
+    noise.inputs["Scale"].default_value = 18.0
+    noise.inputs["Detail"].default_value = 2.0
+    nt.links.new(coord.outputs["Object"], noise.inputs["Vector"])
+    streak_mix = nt.nodes.new("ShaderNodeMixRGB")
+    streak_mix.blend_type = 'OVERLAY'
+    streak_mix.inputs["Fac"].default_value = 0.12
+    nt.links.new(ramp.outputs["Color"], streak_mix.inputs["Color1"])
+    nt.links.new(noise.outputs["Color"], streak_mix.inputs["Color2"])
+
+    nt.links.new(streak_mix.outputs["Color"], bsdf.inputs["Base Color"])
+    return mat
+
+
 def _preview_eyes(mesh_name, parent=None):
     """Build the preview eyes and return them. Pass parent=None when the caller wants to
     attach them itself — the rig bone-parents them to the head bone so they follow a pose."""
     sclera_r, (sx, sy, sz), pupil_r, (px, py, pz) = PREVIEW_EYES[mesh_name]
     white = _eye_material("PreviewSclera", (0.97, 0.96, 0.94))
-    dark = _eye_material("PreviewPupil", (0.03, 0.03, 0.04))
+    # Warm amber-brown iris -- a common real camel eye colour, and it fits the warm/toy
+    # palette better than a colourless grey iris would.
+    dark = _iris_pupil_material("PreviewPupil", (0.42, 0.24, 0.09))
 
     made = []
     for side in (1, -1):
@@ -473,10 +555,10 @@ def build_lineup():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     clay = _clay()
 
-    zayn = build_zayn_base()
-    zayn.data.materials.append(clay)
-    zayn.location = (-0.75, 0, 0)
-    _preview_eyes("Zayn_Base", zayn)
+    kamel = build_kamel_base()
+    kamel.data.materials.append(clay)
+    kamel.location = (-0.75, 0, 0)
+    _preview_eyes("Kamel_Base", kamel)
 
     milo = build_milo_base()
     milo.data.materials.append(clay)
@@ -484,7 +566,7 @@ def build_lineup():
     _preview_eyes("Milo_Base", milo)
 
     _stage(target_z=1.05, cam_dist=6.4, res_x=1400, res_y=850)
-    return zayn, milo
+    return kamel, milo
 
 
 def _render(path):
@@ -496,12 +578,12 @@ def _render(path):
 if __name__ == "__main__":
     here = os.path.dirname(os.path.abspath(__file__))
 
-    for which in ("zayn", "milo"):
+    for which in ("kamel", "milo"):
         body = build_turnaround(which)
         print(f"{which.upper()}_VERTS:{len(body.data.vertices)} "
               f"HEIGHT:{round(body.dimensions.z, 3)}")
         _render(os.path.join(here, f"{which}_base.png"))
 
-    zayn, milo = build_lineup()
-    print(f"HEIGHT_RATIO:{round(milo.dimensions.z / zayn.dimensions.z, 3)}")
+    kamel, milo = build_lineup()
+    print(f"HEIGHT_RATIO:{round(milo.dimensions.z / kamel.dimensions.z, 3)}")
     _render(os.path.join(here, "lineup_base.png"))

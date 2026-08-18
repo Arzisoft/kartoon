@@ -14,7 +14,7 @@ Two decisions worth stating, because they are the reason this file exists at all
    parenting could never bend an elbow; this can.
 
 2. Same bone names and hierarchy for every character, different bone LENGTHS. Milo is
-   built much shorter than Zayn, but as long as the skeletons share a structure, one motion
+   built much shorter than Kamel, but as long as the skeletons share a structure, one motion
    clip plays on both and humanoid motion sources retarget onto either. Giving the two
    characters structurally different skeletons would mean authoring every animation twice.
 
@@ -146,8 +146,8 @@ MILO_LOOK_UP_POSE = {
 }
 
 RIGS = {
-    "zayn": {"build": base_body.build_zayn_base, "joints": base_body.ZAYN_JOINTS,
-             "rig_name": "Zayn_Rig", "mesh": "Zayn_Base", "pose": WAVE_POSE, "spread": 1.05,
+    "kamel": {"build": base_body.build_kamel_base, "joints": base_body.KAMEL_JOINTS,
+             "rig_name": "Kamel_Rig", "mesh": "Kamel_Base", "pose": WAVE_POSE, "spread": 1.05,
              "target_z": 1.25, "cam_dist": 7.5},
     "milo": {"build": base_body.build_milo_base, "joints": base_body.MILO_JOINTS,
              "rig_name": "Milo_Rig", "mesh": "Milo_Base", "pose": MILO_LOOK_UP_POSE,
@@ -214,16 +214,16 @@ def build_two_shot():
     shows whether the size contrast still works once they are animated."""
     bpy.ops.wm.read_factory_settings(use_empty=True)
 
-    zayn_body, zayn_arm = build_rigged("zayn")
-    zayn_arm.location = (-0.75, 0, 0)
-    pose(zayn_arm, WAVE_POSE)
+    kamel_body, kamel_arm = build_rigged("kamel")
+    kamel_arm.location = (-0.75, 0, 0)
+    pose(kamel_arm, WAVE_POSE)
 
     milo_body, milo_arm = build_rigged("milo")
     milo_arm.location = (0.72, 0, 0)
     pose(milo_arm, MILO_LOOK_UP_POSE)
 
     base_body._stage(target_z=1.05, cam_dist=6.4, res_x=1400, res_y=850)
-    return zayn_body, milo_body
+    return kamel_body, milo_body
 
 
 def _render(path):
@@ -235,7 +235,7 @@ def _render(path):
 if __name__ == "__main__":
     here = os.path.dirname(os.path.abspath(__file__))
 
-    for which in ("zayn", "milo"):
+    for which in ("kamel", "milo"):
         build_pose_test(which)
         _render(os.path.join(here, f"{which}_rig.png"))
 
