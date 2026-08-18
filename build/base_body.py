@@ -24,17 +24,17 @@ import os
 from mathutils import Vector
 
 # ---------------------------------------------------------------- proportions
-# Heights are the one thing that must differ per character. Zayn reads as the big,
+# Heights are the one thing that must differ per character. Kamel reads as the big,
 # calm one; Milo (later) is built to roughly 0.6x this so the two-shot silhouette
 # contrast survives. Head is deliberately ~1/3 of total height (baby schema).
-ZAYN_HEIGHT = 2.05  # was 2.20 -- legs shortened ~20% for toy/chibi appeal (see build_zayn_base)
-MILO_HEIGHT = 1.36  # ~0.62x Zayn: big/calm vs. small/quick has to read instantly in a two-shot
+KAMEL_HEIGHT = 2.05  # was 2.20 -- legs shortened ~20% for toy/chibi appeal (see build_kamel_base)
+MILO_HEIGHT = 1.36  # ~0.62x Kamel: big/calm vs. small/quick has to read instantly in a two-shot
 
 # Remesh/smoothing settings are a species-read tradeoff, not just a quality dial: too coarse a
 # voxel or too much smoothing melts the neck, ears and muzzle into the body mass and the
 # character stops reading as a camel at all.
 # Voxel size is ABSOLUTE, so a smaller character needs a smaller voxel to keep the same level
-# of detail — Milo's beak is roughly a third the size of Zayn's muzzle and dissolves at Zayn's
+# of detail — Milo's beak is roughly a third the size of Kamel's muzzle and dissolves at Kamel's
 # setting.
 VOXEL_SIZE = 0.022
 MILO_VOXEL_SIZE = 0.013
@@ -50,7 +50,7 @@ def _scaffold(name):
 def _track(scaffold, obj):
     # Bake each primitive's location/rotation/scale straight into its mesh data. Without this,
     # join() adopts the *first* part's transform as the joined origin and silently offsets the
-    # whole character (an early version of this sank Zayn 2.2m through the floor). With every
+    # whole character (an early version of this sank Kamel 2.2m through the floor). With every
     # part at an identity transform, the joined mesh's local coordinates are exactly the
     # construction coordinates and the origin lands on world (0,0,0).
     bpy.ops.object.select_all(action='DESELECT')
@@ -109,8 +109,8 @@ def fuse(scaffold, voxel_size=VOXEL_SIZE):
     return body
 
 
-# ---------------------------------------------------------------------- Zayn
-# Single source of truth for Zayn's joint positions, in construction space (facing -Y, feet
+# ---------------------------------------------------------------------- Kamel
+# Single source of truth for Kamel's joint positions, in construction space (facing -Y, feet
 # on z=0). Both the base mesh below and the skeleton in rig.py read these, so the bones can
 # never drift out of the limbs they are supposed to deform. Sided joints are given for the
 # +X side; the -X side mirrors by negating x.
@@ -119,7 +119,7 @@ def fuse(scaffold, voxel_size=VOXEL_SIZE):
 # the lowest-risk way to push toward toy/chibi head-to-body proportions without touching the
 # long neck / small head / long snout that this file's docstring identifies as the actual
 # camel species-read (those stay exactly as long, proportionally, as before).
-ZAYN_JOINTS = {
+KAMEL_JOINTS = {
     "hip":       (0.150, 0.02, 0.77),
     "knee":      (0.170, 0.00, 0.445),
     "ankle":     (0.180, 0.00, 0.16),
@@ -147,7 +147,7 @@ def joint(table, name, side=1):
     return (x * side, y, z)
 
 
-def build_zayn_base():
+def build_kamel_base():
     """Upright camel base body, A-pose, facing -Y. Returns the single joined mesh object.
 
     Built to the cartoon-camel reference direction, which overrides the bible's original
@@ -163,10 +163,10 @@ def build_zayn_base():
       3. One clear hump peak behind the shoulders, rising above the back line.
       4. Lanky legs under a pear-shaped body — belly low and forward, chest narrow.
     """
-    s = _scaffold("Zayn_Base")
+    s = _scaffold("Kamel_Base")
 
     def J(name, side=1):
-        return joint(ZAYN_JOINTS, name, side)
+        return joint(KAMEL_JOINTS, name, side)
 
     # --- legs: shorter and a touch thicker than before (chibi/toy proportions), knobbly
     # knee, hoof at the bottom
@@ -241,8 +241,8 @@ def build_zayn_base():
 
 
 # ---------------------------------------------------------------------- Milo
-# Same joint NAMES as Zayn — that is what lets one motion clip play on both and what lets
-# humanoid motion retarget onto either. Only the positions differ: Milo is ~0.62x Zayn's
+# Same joint NAMES as Kamel — that is what lets one motion clip play on both and what lets
+# humanoid motion retarget onto either. Only the positions differ: Milo is ~0.62x Kamel's
 # height with a proportionally bigger head, a much shorter neck, and wings where the arms go.
 MILO_JOINTS = {
     "hip":       (0.095, 0.00, 0.395),
@@ -299,10 +299,10 @@ def build_milo_base():
     add_ball(s, 0.195, J("chest"), scale=(1.05, 0.95, 0.95))
 
     # --- neck: barely there. A budgie's head sits almost straight on the body, and this is
-    # a big part of what separates the small/quick read from Zayn's long-necked calm.
+    # a big part of what separates the small/quick read from Kamel's long-necked calm.
     add_capsule(s, J("neck_base"), J("head_base"), 0.105)
 
-    # --- head: proportionally larger than Zayn's (baby schema pushed further on the small one)
+    # --- head: proportionally larger than Kamel's (baby schema pushed further on the small one)
     add_ball(s, 0.235, (0, -0.02, 1.085), scale=(1.0, 1.0, 0.98))
 
     # --- BEAK: primary budgie cue. Short, deep and hooked DOWNWARD — the hook is the whole
@@ -362,18 +362,18 @@ def build_milo_base():
 # the head read as a face.
 PREVIEW_EYES = {
     # Enlarged ~25% (0.063->0.080 sclera) for more expressive/toddler-appeal eyes -- the
-    # documented mechanism in build_zayn_base for adding cuteness without growing the skull.
+    # documented mechanism in build_kamel_base for adding cuteness without growing the skull.
     # z shifted -0.15 to match the whole upper body dropping onto the shortened legs.
     # Pupil grown 0.040->0.050 (ratio 0.5->0.625 of sclera) per chibi-proportion-theory.md:
     # pupil-to-sclera ratio reads as "cute" more than iris/sclera size alone (why big-pupilled
     # animals like cats look cute). Kept below ~0.7 so a visible white ring survives around the
     # pupil -- the file's own note above warns solid dark eyes read as insect eyes.
-    "Zayn_Base": (0.080, (0.086, -0.248, 1.926), 0.050, (0.098, -0.294, 1.922)),
+    "Kamel_Base": (0.080, (0.086, -0.248, 1.926), 0.050, (0.098, -0.294, 1.922)),
     "Milo_Base": (0.062, (0.150, -0.170, 1.112), 0.032, (0.166, -0.218, 1.108)),
 }
 
 CHARACTERS = {
-    "zayn": {"build": build_zayn_base, "mesh": "Zayn_Base", "spread": 1.30,
+    "kamel": {"build": build_kamel_base, "mesh": "Kamel_Base", "spread": 1.30,
              "target_z": 1.20, "cam_dist": 8.0},
     "milo": {"build": build_milo_base, "mesh": "Milo_Base", "spread": 0.95,
              "target_z": 0.70, "cam_dist": 5.2},
@@ -555,10 +555,10 @@ def build_lineup():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     clay = _clay()
 
-    zayn = build_zayn_base()
-    zayn.data.materials.append(clay)
-    zayn.location = (-0.75, 0, 0)
-    _preview_eyes("Zayn_Base", zayn)
+    kamel = build_kamel_base()
+    kamel.data.materials.append(clay)
+    kamel.location = (-0.75, 0, 0)
+    _preview_eyes("Kamel_Base", kamel)
 
     milo = build_milo_base()
     milo.data.materials.append(clay)
@@ -566,7 +566,7 @@ def build_lineup():
     _preview_eyes("Milo_Base", milo)
 
     _stage(target_z=1.05, cam_dist=6.4, res_x=1400, res_y=850)
-    return zayn, milo
+    return kamel, milo
 
 
 def _render(path):
@@ -578,12 +578,12 @@ def _render(path):
 if __name__ == "__main__":
     here = os.path.dirname(os.path.abspath(__file__))
 
-    for which in ("zayn", "milo"):
+    for which in ("kamel", "milo"):
         body = build_turnaround(which)
         print(f"{which.upper()}_VERTS:{len(body.data.vertices)} "
               f"HEIGHT:{round(body.dimensions.z, 3)}")
         _render(os.path.join(here, f"{which}_base.png"))
 
-    zayn, milo = build_lineup()
-    print(f"HEIGHT_RATIO:{round(milo.dimensions.z / zayn.dimensions.z, 3)}")
+    kamel, milo = build_lineup()
+    print(f"HEIGHT_RATIO:{round(milo.dimensions.z / kamel.dimensions.z, 3)}")
     _render(os.path.join(here, "lineup_base.png"))

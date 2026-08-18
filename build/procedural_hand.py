@@ -100,7 +100,17 @@ def build_finger(name, base_pos, direction, length, base_radius, tip_radius,
     bpy.context.view_layer.objects.active = obj
     bpy.ops.object.shade_smooth()
     sub = obj.modifiers.new("Subsurf", 'SUBSURF')
-    sub.levels = 1
+    sub.levels = 2  # was 1 -- needs enough resolution for the displace pass below to bite into
+    # Same subtle organic-noise displacement as the body (see cycles_sss_test.py) -- softens
+    # the visible ring-segment transitions between the tube rings so fingers read as organic
+    # digits rather than stacked cylinder primitives. Strength scaled way down from the body's
+    # 0.006 since fingers are ~15x smaller (radius ~0.02 vs body ~0.3).
+    finger_noise_tex = bpy.data.textures.new(f"{name}_Noise", type='CLOUDS')
+    finger_noise_tex.noise_scale = 0.04
+    finger_disp = obj.modifiers.new("FingerDetail", 'DISPLACE')
+    finger_disp.texture = finger_noise_tex
+    finger_disp.strength = 0.0012
+    finger_disp.mid_level = 0.5
     if parent:
         obj.parent = parent
     return obj
@@ -130,7 +140,7 @@ def build_hand(name, palm_center, side, material, parent=None,
     # thumb (no pinky) -- a deliberate reduced digit count for chunky toy-proportions, matching
     # the design already used for the sphere-stack fingers.
     # Radii thickened ~1.35x from the first working version -- an isolated close-up test
-    # looked fine, but at Zayn's actual on-character scale/camera distance thin capsule
+    # looked fine, but at Kamel's actual on-character scale/camera distance thin capsule
     # fingers read as spindly matchsticks, thinner and less "chunky toy" than even the old
     # sphere-stack version despite being cleaner topology. Chunkiness matters more than
     # anatomical slenderness for this style (chibi-proportion-theory.md).
@@ -151,6 +161,45 @@ def build_hand(name, palm_center, side, material, parent=None,
         parts.append(build_finger(
             f"{name}_{tag}", base_pos, direction, length, base_r, tip_r, curl_deg=curl,
             material=material, parent=parent or palm,
+        ))
+    return parts
+
+
+def build_foot(name, foot_center, side, material, parent=None,
+                pad_radius=0.058, pad_scale=(1.0, 1.15, 0.85)):
+    """Heel/pad (simple squashed sphere, same reasoning as the hand's palm) plus two
+    forward-pointing toes -- real camel feet split into two padded toes, not five separate
+    digits. A toe is geometrically the same shape as a finger (a tapered tube with a gentle
+    curl), just shorter/thicker and pointing forward-and-down instead of hanging down, so this
+    reuses build_finger() directly instead of a separate toe-building function.
+
+    Replaces the old extremity_cap sphere-stack foot (two overlapping toe-lobe spheres + a
+    pad-blend sphere) with the same continuous-tube upgrade the hands got.
+    """
+    bpy.ops.mesh.primitive_uv_sphere_add(radius=pad_radius, location=foot_center, segments=16, ring_count=8)
+    pad = bpy.context.active_object
+    pad.name = f"{name}_Pad"
+    pad.scale = pad_scale
+    pad.data.materials.append(material)
+    bpy.ops.object.shade_smooth()
+    if parent:
+        pad.parent = parent
+
+    # (base_offset_from_pad_center, direction_xyz, length, base_radius, tip_radius, curl) --
+    # two toes spread across the front of the pad (offset in X), pointing forward (-Y, same
+    # direction the snout faces) and slightly down, with a gentle curl so the tips aren't
+    # dead straight rods.
+    toe_gap = 0.055
+    toe_specs = [
+        ("ToeA", (-toe_gap, -0.01, -0.01), (0.12 * side, -0.96, -0.24), 0.095, 0.048, 0.030, 14),
+        ("ToeB", (toe_gap, -0.01, -0.01), (-0.08 * side, -0.98, -0.22), 0.100, 0.050, 0.032, 16),
+    ]
+    parts = [pad]
+    for tag, offset, direction, length, base_r, tip_r, curl in toe_specs:
+        base_pos = Vector(foot_center) + Vector(offset)
+        parts.append(build_finger(
+            f"{name}_{tag}", base_pos, direction, length, base_r, tip_r, curl_deg=curl,
+            material=material, parent=parent or pad,
         ))
     return parts
 

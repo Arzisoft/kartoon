@@ -3,7 +3,7 @@ Layer 2 of the character pipeline: MATERIALS + small accent geometry.
 
 Reads base_body.py (Layer 1 — geometry only, no colour) and adds:
   - body materials (matte, not glossy — matte reads "plush," glossy reads "toy")
-  - Zayn's turquoise saddle-blanket (small separate prop mesh, not fused into the body)
+  - Kamel's turquoise saddle-blanket (small separate prop mesh, not fused into the body)
   - Milo's cheek-patch colour (face-selected on the existing fused geometry — the cheek
     patches are already modelled in base_body.py, they just have no second material yet)
   - a light procedural bump on the blanket so it reads as woven fabric rather than a flat
@@ -62,10 +62,11 @@ def fabric_material(name, color, roughness=0.75):
 
 
 def advanced_material(name, color, roughness=0.3, subsurface=0.0, radius=(0.9, 0.45, 0.2),
-                       fabric=False, ao_strength=0.35, rim_strength=0.22, rim_color=None):
-    """A flat Principled BSDF only gets you "flat toy plastic" -- this adds the three cheap,
-    UV-free procedural passes that separate that from a polished soft-PBR render, learned from
-    a cute-character-design tutorial's fabric technique and standard PBR practice (see
+                       fabric=False, ao_strength=0.35, rim_strength=0.22, rim_color=None,
+                       coat_weight=0.0, coat_roughness=0.1):
+    """A flat Principled BSDF only gets you "flat toy plastic" -- this adds the cheap, UV-free
+    procedural passes that separate that from a polished soft-PBR render, learned from a
+    cute-character-design tutorial's fabric technique and standard PBR practice (see
     .claude/skills/blender-character-pipeline/references/chibi-proportion-theory.md):
 
       1. Pointiness-driven AO: creases (low Geometry Pointiness) get mixed toward a darker
@@ -76,6 +77,11 @@ def advanced_material(name, color, roughness=0.3, subsurface=0.0, radius=(0.9, 0
       3. A soft Fresnel-driven rim light (added on top of the BSDF via Add Shader) --
          separates the silhouette from the backdrop the way a photography rim light does,
          instead of relying on the HDRI alone.
+      4. Optional clearcoat (coat_weight > 0): a real "glossy toy vinyl" surface is a tight
+         clearcoat specular highlight sitting on top of a softer diffuse base, not one
+         roughness value doing both jobs -- one broad roughness reads flatter/more matte than
+         the reference's glossy-toy look even at a low roughness value. Off by default (0.0)
+         since it should only go on genuinely glossy surfaces (skin, glasses, cap), not cloth.
 
     fabric=True additionally runs a Magic Texture -> Bump -> Normal chain (Object texture
     coordinates, no UV unwrap needed) for a woven-cloth surface, for shirt/shorts/cap-style
@@ -88,6 +94,15 @@ def advanced_material(name, color, roughness=0.3, subsurface=0.0, radius=(0.9, 0
     out = nt.nodes["Material Output"]
     bsdf.inputs["Base Color"].default_value = (*color, 1.0)
     bsdf.inputs["Roughness"].default_value = roughness
+    if coat_weight:
+        for coat_key in ("Coat Weight", "Clearcoat"):
+            if coat_key in bsdf.inputs:
+                bsdf.inputs[coat_key].default_value = coat_weight
+                break
+        for coat_rough_key in ("Coat Roughness", "Clearcoat Roughness"):
+            if coat_rough_key in bsdf.inputs:
+                bsdf.inputs[coat_rough_key].default_value = coat_roughness
+                break
     for weight_key in ("Subsurface Weight", "Subsurface"):
         if weight_key in bsdf.inputs:
             bsdf.inputs[weight_key].default_value = subsurface
@@ -156,7 +171,7 @@ def shrinkwrap_accent(name, target, location, rotation, scale, material,
                        size=0.3, subdiv_cuts=4, offset=0.012, thickness=0.012, parent=None):
     """A small flat disc that conforms to `target`'s surface via Shrinkwrap.
 
-    This is the general version of the technique that fixed Zayn's blanket: instead of
+    This is the general version of the technique that fixed Kamel's blanket: instead of
     guessing raw coordinates against a mesh whose exact dimensions aren't known ahead of
     time (or hand-selecting faces on the fused mesh, which gives ragged/jagged edges — see
     the first cheek-patch attempt, which read as fangs instead of markings up close), place
@@ -273,19 +288,19 @@ def extremity_cap(name, parts, material, parent=None):
 
 
 def build():
-    zayn = base_body.build_zayn_base()
+    kamel = base_body.build_kamel_base()
     milo = base_body.build_milo_base()
 
-    tan = matte_material("Zayn_Tan", (0.85, 0.64, 0.40))
+    tan = matte_material("Kamel_Tan", (0.85, 0.64, 0.40))
     yellow = matte_material("Milo_Yellow", (0.98, 0.82, 0.10))
     turquoise = matte_material("Turquoise", (0.08, 0.52, 0.53))
 
-    zayn.data.materials.append(tan)
+    kamel.data.materials.append(tan)
     milo.data.materials.append(yellow)
 
     # Milo's cheek patches — previously face-selected on the fused mesh, which gave jagged/
     # serrated edges that read as fangs up close (see closeup_milo.png). Small shrinkwrapped
-    # discs give clean edges instead, same trick as Zayn's blanket below.
+    # discs give clean edges instead, same trick as Kamel's blanket below.
     for side in (1, -1):
         shrinkwrap_accent(
             f"Milo_Cheek_{side}", milo,
@@ -294,24 +309,24 @@ def build():
             size=0.10, subdiv_cuts=3, offset=0.010, thickness=0.008, parent=milo,
         )
 
-    # Zayn's saddle blanket — draped near the hump, wide enough to read from the front.
-    blanket_mat = fabric_material("Zayn_Blanket_Fabric", (0.08, 0.52, 0.53))
+    # Kamel's saddle blanket — draped near the hump, wide enough to read from the front.
+    blanket_mat = fabric_material("Kamel_Blanket_Fabric", (0.08, 0.52, 0.53))
     shrinkwrap_accent(
-        "Zayn_Blanket", zayn,
+        "Kamel_Blanket", kamel,
         location=(0, 0.05, 1.25), rotation=(math.radians(35), 0, 0),
         scale=(1.0, 0.75, 1.0), material=blanket_mat,
-        size=0.85, subdiv_cuts=6, offset=0.018, thickness=0.03, parent=zayn,
+        size=0.85, subdiv_cuts=6, offset=0.018, thickness=0.03, parent=kamel,
     )
 
-    return zayn, milo
+    return kamel, milo
 
 
 if __name__ == "__main__":
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    zayn, milo = build()
-    zayn.location = (-0.9, 0, 0)
+    kamel, milo = build()
+    kamel.location = (-0.9, 0, 0)
     milo.location = (0.85, 0, 0)
-    base_body._preview_eyes("Zayn_Base", zayn)
+    base_body._preview_eyes("Kamel_Base", kamel)
     base_body._preview_eyes("Milo_Base", milo)
     base_body._stage(target_z=1.05, cam_dist=6.4, res_x=1600, res_y=900)
 
